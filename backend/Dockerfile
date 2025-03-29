@@ -1,6 +1,8 @@
 FROM golang:1.24.1-alpine AS builder 
 WORKDIR /app 
 COPY . . 
+# Stelle sicher, dass das config-Verzeichnis existiert
+RUN mkdir -p config
 RUN go build -o bin/kormit cmd/kormit/main.go 
  
 FROM alpine:3.15 
