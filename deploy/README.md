@@ -311,6 +311,12 @@ Das Schnellstart-Skript bietet ein einfaches Menü zur Verwaltung Ihrer Kormit-I
 - Aktualisieren
 - Status anzeigen
 
+## Änderungen in Version 1.1.2
+
+- **Docker Compose-Kompatibilität**: Entfernung des veralteten `version`-Attributs aus der docker-compose.yml
+- **Verbesserte Skript-Sicherheit**: Verwendung von einzigartigen temporären Dateinamen
+- **Fehlerbehandlung**: Korrektur des "invalid hostPort"-Fehlers im Installationsskript
+
 ## Änderungen in Version 1.1.1
 
 - **Verbesserte SSL-Zertifikatserstellung**: Robustere Methode zur Erstellung von SSL-Zertifikaten, die mit allen OpenSSL-Versionen kompatibel ist.

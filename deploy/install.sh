@@ -3,7 +3,7 @@
 # Unterstützt: Ubuntu, Debian, CentOS, RHEL
 
 # Version
-VERSION="1.1.1"
+VERSION="1.1.2"
 
 # Parameter verarbeiten
 INSTALL_DIR="/opt/kormit"

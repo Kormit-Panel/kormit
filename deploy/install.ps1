@@ -2,7 +2,7 @@
 # Dieses Skript installiert Kormit auf einem Windows-Server mit Docker Desktop
 
 # Version
-$Version = "1.1.1"
+$Version = "1.1.2"
 
 param (
     [string]$InstallDir = "C:\kormit",
@@ -173,8 +173,6 @@ function New-DockerComposeFile {
         if ($UseHttps) {
             # Standard-Konfiguration mit HTTPS
             $Content = @"
-version: '3.8'
-
 services:
   db:
     image: postgres:15-alpine
@@ -250,8 +248,6 @@ volumes:
         } else {
             # HTTP-only Konfiguration
             $Content = @"
-version: '3.8'
-
 services:
   db:
     image: postgres:15-alpine
