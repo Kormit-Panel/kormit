@@ -25,10 +25,10 @@ Ein modernes Panel zur Verwaltung von Entwicklungsumgebungen und Servern mit Bac
 
 ```bash
 # Linux
-curl -fsSL https://raw.githubusercontent.com/yourusername/kormit/main/deploy/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/kormit-panel/kormit/main/deploy/install.sh | sudo bash
 
 # Windows (PowerShell als Administrator)
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/yourusername/kormit/main/deploy/install.ps1" -OutFile "$env:TEMP\install.ps1"
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/kormit-panel/kormit/main/deploy/install.ps1" -OutFile "$env:TEMP\install.ps1"
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 & "$env:TEMP\install.ps1"
 ```
@@ -44,7 +44,7 @@ docker pull ghcr.io/kormit-panel/kormit/kormit-backend:latest
 docker pull ghcr.io/kormit-panel/kormit/kormit-frontend:latest
 
 # Mit Docker Compose
-wget https://raw.githubusercontent.com/yourusername/kormit/main/deploy/docker/production/docker-compose.yml
+wget https://raw.githubusercontent.com/kormit-panel/kormit/main/deploy/docker/production/docker-compose.yml
 docker compose up -d
 ```
 
