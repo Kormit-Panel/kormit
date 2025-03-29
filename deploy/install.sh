@@ -297,8 +297,6 @@ install_kormit() {
     if [ "$USE_HTTPS" = true ]; then
         # Standard-Konfiguration mit HTTPS
         cat > docker/production/docker-compose.yml <<EOL
-version: '3.8'
-
 services:
   db:
     image: postgres:15-alpine
@@ -374,8 +372,6 @@ EOL
     else
         # HTTP-only Konfiguration
         cat > docker/production/docker-compose.yml <<EOL
-version: '3.8'
-
 services:
   db:
     image: postgres:15-alpine

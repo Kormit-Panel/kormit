@@ -21,14 +21,19 @@ echo -e "${CYAN}╚════════════════════�
 echo -e "${GREEN}Lade Kormit Installationsskript herunter...${NC}"
 echo -e "${BLUE}Sie können den HTTP-only-Modus mit --http-only aktivieren, wenn Sie kein HTTPS benötigen.${NC}"
 
+# Temporären Dateinamen generieren
+TEMP_SCRIPT="kormit_install_$$.sh"
+
 # Installationsskript herunterladen und ausführen
-curl -sSL ${REPO_URL}/install.sh -o kormit_install.sh
-chmod +x kormit_install.sh
+curl -sSL ${REPO_URL}/install.sh -o "$TEMP_SCRIPT"
+chmod +x "$TEMP_SCRIPT"
 
 # Parameter an das Skript weiterleiten
-./kormit_install.sh "$@"
+./"$TEMP_SCRIPT" "$@"
+RESULT=$?
 
 # Aufräumen
-rm kormit_install.sh
+rm -f "$TEMP_SCRIPT"
 
-echo -e "${GREEN}Installation abgeschlossen!${NC}" 
+echo -e "${GREEN}Installation abgeschlossen!${NC}"
+exit $RESULT 
