@@ -310,3 +310,9 @@ Das Schnellstart-Skript bietet ein einfaches Menü zur Verwaltung Ihrer Kormit-I
 - Stoppen
 - Aktualisieren
 - Status anzeigen
+
+## Änderungen in Version 1.1.0
+
+- **SSL-Zertifikat-Fix**: Die Erstellung der selbstsignierten SSL-Zertifikate wurde verbessert und ist jetzt kompatibel mit verschiedenen OpenSSL-Versionen.
+- **Verbesserte Sicherheit**: Verwendung von SHA-256 für Zertifikate und Hinzufügung von 'localhost' als alternativer Name.
+- **Automatische Anpassung**: Das Installationsskript erkennt die OpenSSL-Version und wählt die passende Methode zur Zertifikatserstellung.

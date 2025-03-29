@@ -253,6 +253,7 @@ subjectAltName = @alt_names
 
 [alt_names]
 DNS.1 = $DomainName
+DNS.2 = localhost
 IP.1 = 127.0.0.1
 "@
     
@@ -265,7 +266,11 @@ IP.1 = 127.0.0.1
         
         # SSL-Zertifikat erstellen
         Write-Debug "Erstelle SSL-Zertifikat mit OpenSSL"
-        openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout "$certPath\kormit.key" -out "$certPath\kormit.crt" -config $openSSLPath
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 `
+            -keyout "$certPath\kormit.key" `
+            -out "$certPath\kormit.crt" `
+            -config $openSSLPath `
+            -sha256
         
         Write-Success "Selbstsigniertes SSL-Zertifikat wurde erstellt."
     }

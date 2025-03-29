@@ -438,11 +438,61 @@ EOL
     # Self-signed Zertifikat für die erste Einrichtung erstellen
     log_info "Selbstsigniertes SSL-Zertifikat wird erstellt..."
     
-    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-        -keyout docker/production/ssl/kormit.key \
-        -out docker/production/ssl/kormit.crt \
-        -subj "/C=DE/ST=State/L=City/O=Organization/CN=$DOMAIN_NAME" \
-        -addext "subjectAltName = DNS:$DOMAIN_NAME, IP:127.0.0.1"
+    # Prüfen ob OpenSSL-Version > 1.1.1
+    OPENSSL_VERSION=$(openssl version | awk '{print $2}')
+    OPENSSL_MAJOR=$(echo $OPENSSL_VERSION | cut -d. -f1)
+    OPENSSL_MINOR=$(echo $OPENSSL_VERSION | cut -d. -f2)
+    OPENSSL_PATCH=$(echo $OPENSSL_VERSION | cut -d. -f3)
+    
+    log_debug "OpenSSL Version: $OPENSSL_VERSION"
+    
+    # Für moderne OpenSSL-Versionen (>= 1.1.1)
+    if [ "$OPENSSL_MAJOR" -gt 1 ] || [ "$OPENSSL_MAJOR" -eq 1 -a "$OPENSSL_MINOR" -ge 1 -a "$OPENSSL_PATCH" -ge 1 ]; then
+        log_debug "Verwende moderne OpenSSL-Version mit -addext"
+        # Korrigierte Version des OpenSSL-Befehls
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            -keyout docker/production/ssl/kormit.key \
+            -out docker/production/ssl/kormit.crt \
+            -subj "/C=DE/ST=State/L=City/O=Organization/CN=$DOMAIN_NAME" \
+            -addext "subjectAltName = DNS:$DOMAIN_NAME, DNS:localhost, IP:127.0.0.1" \
+            -sha256
+    else
+        # Für ältere OpenSSL-Versionen (< 1.1.1) 
+        log_debug "Verwende ältere OpenSSL-Version mit Konfigurationsdatei"
+        
+        # Konfiguration erstellen
+        cat > docker/production/ssl/openssl.cnf <<EOL
+[req]
+distinguished_name = req_distinguished_name
+x509_extensions = v3_req
+prompt = no
+
+[req_distinguished_name]
+C = DE
+ST = State
+L = City
+O = Organization
+CN = $DOMAIN_NAME
+
+[v3_req]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = $DOMAIN_NAME
+DNS.2 = localhost
+IP.1 = 127.0.0.1
+EOL
+        
+        # Zertifikat mit Konfigurationsdatei erstellen
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            -keyout docker/production/ssl/kormit.key \
+            -out docker/production/ssl/kormit.crt \
+            -config docker/production/ssl/openssl.cnf \
+            -sha256
+            
+        # Konfigurationsdatei entfernen
+        rm -f docker/production/ssl/openssl.cnf
+    fi
     
     chmod 600 docker/production/ssl/kormit.key
     
