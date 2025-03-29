@@ -1,6 +1,6 @@
 # Kormit Frontend 
  
-Vue.js-based frontend application for Kormit. 
+Vue.js-based frontend application for Kormit, using Vite as a build tool.
  
 ## Directory Structure 
  
@@ -10,7 +10,7 @@ Vue.js-based frontend application for Kormit.
   - `components/` - Reusable components 
   - `views/` - Page views 
   - `router/` - Vue Router configuration 
-  - `store/` - Vuex state management 
+  - `stores/` - Pinia state management 
   - `api/` - API clients for backend 
   - `plugins/` - Vue plugins 
   - `utils/` - Utility functions 
@@ -31,11 +31,23 @@ Vue.js-based frontend application for Kormit.
  
 2. Run development server: 
    ``` 
-   npm run serve 
+   npm run dev 
    ``` 
  
 ### Building 
  
 ``` 
 npm run build 
+``` 
+
+### Preview Production Build
+
+```
+npm run preview
+```
+
+### Testing
+
+```
+npm run test
 ``` 

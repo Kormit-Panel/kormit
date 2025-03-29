@@ -27,21 +27,20 @@ services:
     build: 
       context: ../../../frontend 
       dockerfile: Dockerfile.dev 
+      args:
+        - NODE_VERSION=20
     container_name: kormit-frontend-dev 
     restart: unless-stopped 
     ports: 
       - "8081:8080" 
     volumes: 
       - ../../../frontend:/app
-      # Stelle sicher, dass node_modules nicht überschrieben werden
-      - /app/node_modules
     depends_on: 
       - kormit-backend-dev 
     environment:
       - NODE_ENV=development
-      - VUE_APP_API_URL=http://localhost:8080
-    # Verbesserte Fehlerbehandlung
-    entrypoint: ["/bin/sh", "-c", "if [ ! -f /app/package.json ]; then echo 'Error: package.json not found'; exit 1; fi && npm run serve || vue-cli-service serve"]
+      - VITE_API_URL=http://localhost:8080
+    command: /bin/sh -c "ls -la && node -v && npm -v && npm run dev -- --host 0.0.0.0"
  
   kormit-db-dev: 
     image: postgres:13 

@@ -1,20 +1,23 @@
-FROM node:16-alpine 
-WORKDIR /app 
+FROM node:20-alpine
+WORKDIR /app
 
-# Installiere Vue CLI global für Entwicklungsumgebung
-RUN npm install -g @vue/cli
+# Debug-Informationen anzeigen
+RUN node -v && npm -v && npm list -g
 
-# Überprüfe, ob package.json existiert und installiere Abhängigkeiten
-COPY package*.json ./ 
-RUN if [ -f package.json ]; then npm install; else echo "Package.json not found, creating minimal package.json" && echo '{"name":"kormit-frontend","version":"0.1.0","private":true}' > package.json && npm install; fi
+# Installiere notwendige globale Pakete
+RUN npm install -g node-gyp
+
+# Kopiere package.json und package-lock.json
+COPY package*.json ./
+RUN npm install
 
 # Kopiere den Rest des Projekts
-COPY . . 
+COPY . .
 
-# Stelle sicher, dass die notwendigen Skripte definiert sind
-RUN if ! grep -q "serve" package.json; then sed -i 's/"scripts": {/"scripts": {\n    "serve": "vue-cli-service serve",/g' package.json; fi
+# Zeige den Inhalt des Verzeichnisses an
+RUN ls -la && echo "Node.js version:" && node -v
 
-EXPOSE 8080 
+EXPOSE 8080
 
-# Verwende eine Shell, um bessere Fehlerbehandlung zu ermöglichen
-CMD ["sh", "-c", "if command -v npm && npm run serve; then true; else echo 'Starting dev server manually' && vue-cli-service serve; fi"] 
+# Starte den Vite-Entwicklungsserver
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"] 
