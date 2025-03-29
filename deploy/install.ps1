@@ -195,8 +195,8 @@ HTTP_PORT=$HttpPort
 HTTPS_PORT=$HttpsPort
 
 # Image-Konfiguration
-BACKEND_IMAGE=kormit/kormit-backend:latest
-FRONTEND_IMAGE=kormit/kormit-frontend:latest
+BACKEND_IMAGE=ghcr.io/kormit-panel/kormit/kormit-backend:latest
+FRONTEND_IMAGE=ghcr.io/kormit-panel/kormit/kormit-frontend:latest
 "@
     
     Set-Content -Path "$Path\docker\production\.env" -Value $envContent -Encoding UTF8

@@ -285,8 +285,8 @@ HTTP_PORT=$HTTP_PORT
 HTTPS_PORT=$HTTPS_PORT
 
 # Image-Konfiguration
-BACKEND_IMAGE=kormit/kormit-backend:latest
-FRONTEND_IMAGE=kormit/kormit-frontend:latest
+BACKEND_IMAGE=ghcr.io/kormit-panel/kormit/kormit-backend:latest
+FRONTEND_IMAGE=ghcr.io/kormit-panel/kormit/kormit-frontend:latest
 EOL
     
     # Self-signed Zertifikat für die erste Einrichtung erstellen
