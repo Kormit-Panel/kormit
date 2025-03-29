@@ -1,6 +1,6 @@
 #!/bin/bash
 # Kormit Installationshelfer - Plattformerkennung
-# Version 1.1.1 - OpenSSL-Zertifikatserstellung verbessert
+# Version 1.1.1 - OpenSSL-Zertifikatserstellung verbessert und HTTP-only-Modus hinzugefügt
 
 # Farbige Ausgaben
 RED='\033[0;31m'

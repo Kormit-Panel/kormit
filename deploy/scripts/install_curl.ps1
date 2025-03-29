@@ -21,6 +21,7 @@ Write-Host "╚═════════════════════�
 Write-Host ""
 
 Write-ColorOutput "Lade Kormit Installationsskript herunter..." -Color Green
+Write-Host "Sie können den HTTP-only-Modus mit -HttpOnly aktivieren, wenn Sie kein HTTPS benötigen." -ForegroundColor Blue
 
 # Temporärer Dateiname für das Installationsskript
 $installScript = "$env:TEMP\kormit_install.ps1"

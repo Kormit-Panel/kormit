@@ -19,6 +19,7 @@ echo -e "${CYAN}║                 KORMIT CURL INSTALLER                      �
 echo -e "${CYAN}╚═══════════════════════════════════════════════════════════╝${NC}"
 
 echo -e "${GREEN}Lade Kormit Installationsskript herunter...${NC}"
+echo -e "${BLUE}Sie können den HTTP-only-Modus mit --http-only aktivieren, wenn Sie kein HTTPS benötigen.${NC}"
 
 # Installationsskript herunterladen und ausführen
 curl -sSL ${REPO_URL}/install.sh -o kormit_install.sh

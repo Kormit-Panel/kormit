@@ -12,6 +12,7 @@ param (
     [switch]$AutoStart,
     [switch]$Yes,
     [switch]$Debug,
+    [switch]$HttpOnly,
     [switch]$Help
 )
 
@@ -28,6 +29,7 @@ if ($Help) {
     Write-Host "  -AutoStart                Kormit nach der Installation automatisch starten"
     Write-Host "  -Yes                      Alle Fragen automatisch mit Ja beantworten"
     Write-Host "  -Debug                    Aktiviere Debug-Ausgaben"
+    Write-Host "  -HttpOnly                 Nur HTTP verwenden, kein HTTPS"
     Write-Host "  -Help                     Diese Hilfe anzeigen"
     Write-Host ""
     Write-Host "Beispiel:"
@@ -160,9 +162,169 @@ function New-InstallationDirectory {
 function New-DockerComposeFile {
     param (
         [string]$Path,
-        [string]$Content
+        [string]$Content = $null,
+        [string]$HttpPort = "80",
+        [string]$HttpsPort = "443",
+        [bool]$UseHttps = $true
     )
     Write-Info "Erstelle docker-compose.yml"
+    
+    if (-not $Content) {
+        if ($UseHttps) {
+            # Standard-Konfiguration mit HTTPS
+            $Content = @"
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: `${VOLUME_PREFIX}-db
+    restart: always
+    environment:
+      POSTGRES_USER: `${DB_USER}
+      POSTGRES_PASSWORD: `${DB_PASSWORD}
+      POSTGRES_DB: `${DB_NAME}
+      TZ: `${TIMEZONE}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - kormit-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U `${DB_USER} -d `${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: `${BACKEND_IMAGE}
+    container_name: `${VOLUME_PREFIX}-backend
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://`${DB_USER}:`${DB_PASSWORD}@db:5432/`${DB_NAME}
+      SECRET_KEY: `${SECRET_KEY}
+      DOMAIN_NAME: `${DOMAIN_NAME}
+      TZ: `${TIMEZONE}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - kormit-net
+
+  frontend:
+    image: `${FRONTEND_IMAGE}
+    container_name: `${VOLUME_PREFIX}-frontend
+    restart: always
+    environment:
+      BACKEND_URL: http://backend:8000
+      TZ: `${TIMEZONE}
+    depends_on:
+      - backend
+    networks:
+      - kormit-net
+
+  nginx:
+    image: nginx:alpine
+    container_name: `${VOLUME_PREFIX}-nginx
+    restart: always
+    ports:
+      - "$HttpPort:80"
+      - "$HttpsPort:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./ssl:/etc/nginx/ssl
+      - ./logs:/var/log/nginx
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - kormit-net
+
+networks:
+  kormit-net:
+    name: `${NETWORK_NAME}
+
+volumes:
+  db_data:
+    name: `${VOLUME_PREFIX}-db-data
+"@
+        } else {
+            # HTTP-only Konfiguration
+            $Content = @"
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: `${VOLUME_PREFIX}-db
+    restart: always
+    environment:
+      POSTGRES_USER: `${DB_USER}
+      POSTGRES_PASSWORD: `${DB_PASSWORD}
+      POSTGRES_DB: `${DB_NAME}
+      TZ: `${TIMEZONE}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - kormit-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U `${DB_USER} -d `${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: `${BACKEND_IMAGE}
+    container_name: `${VOLUME_PREFIX}-backend
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://`${DB_USER}:`${DB_PASSWORD}@db:5432/`${DB_NAME}
+      SECRET_KEY: `${SECRET_KEY}
+      DOMAIN_NAME: `${DOMAIN_NAME}
+      TZ: `${TIMEZONE}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - kormit-net
+
+  frontend:
+    image: `${FRONTEND_IMAGE}
+    container_name: `${VOLUME_PREFIX}-frontend
+    restart: always
+    environment:
+      BACKEND_URL: http://backend:8000
+      TZ: `${TIMEZONE}
+    depends_on:
+      - backend
+    networks:
+      - kormit-net
+
+  nginx:
+    image: nginx:alpine
+    container_name: `${VOLUME_PREFIX}-nginx
+    restart: always
+    ports:
+      - "$HttpPort:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./logs:/var/log/nginx
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - kormit-net
+
+networks:
+  kormit-net:
+    name: `${NETWORK_NAME}
+
+volumes:
+  db_data:
+    name: `${VOLUME_PREFIX}-db-data
+"@
+        }
+    }
+    
     Write-Debug "Speichere docker-compose.yml in $Path\docker\production\docker-compose.yml"
     Set-Content -Path "$Path\docker\production\docker-compose.yml" -Value $Content -Encoding UTF8
     Write-Success "docker-compose.yml wurde erstellt."
@@ -172,9 +334,105 @@ function New-DockerComposeFile {
 function New-NginxConfigFile {
     param (
         [string]$Path,
-        [string]$Content
+        [string]$Content = $null,
+        [string]$DomainName = "localhost",
+        [bool]$UseHttps = $true
     )
     Write-Info "Erstelle nginx.conf"
+    
+    if (-not $Content) {
+        if ($UseHttps) {
+            # Standard-Konfiguration mit HTTPS
+            $Content = @"
+server {
+    listen 80;
+    server_name $DomainName;
+    
+    # HTTP zu HTTPS umleiten
+    location / {
+        return 301 https://`$host`$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name $DomainName;
+
+    # SSL-Konfiguration
+    ssl_certificate /etc/nginx/ssl/kormit.crt;
+    ssl_certificate_key /etc/nginx/ssl/kormit.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384;
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:SSL:10m;
+
+    # Frontend
+    location / {
+        proxy_pass http://frontend:80;
+        proxy_set_header Host `$host;
+        proxy_set_header X-Real-IP `$remote_addr;
+        proxy_set_header X-Forwarded-For `$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto `$scheme;
+    }
+
+    # Backend API
+    location /api {
+        proxy_pass http://backend:8000;
+        proxy_set_header Host `$host;
+        proxy_set_header X-Real-IP `$remote_addr;
+        proxy_set_header X-Forwarded-For `$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto `$scheme;
+        
+        # Für WebSockets
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade `$http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    # Logs
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log;
+}
+"@
+        } else {
+            # HTTP-only Konfiguration
+            $Content = @"
+server {
+    listen 80;
+    server_name $DomainName;
+
+    # Frontend
+    location / {
+        proxy_pass http://frontend:80;
+        proxy_set_header Host `$host;
+        proxy_set_header X-Real-IP `$remote_addr;
+        proxy_set_header X-Forwarded-For `$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto `$scheme;
+    }
+
+    # Backend API
+    location /api {
+        proxy_pass http://backend:8000;
+        proxy_set_header Host `$host;
+        proxy_set_header X-Real-IP `$remote_addr;
+        proxy_set_header X-Forwarded-For `$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto `$scheme;
+        
+        # Für WebSockets
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade `$http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    # Logs
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log;
+}
+"@
+        }
+    }
+    
     Write-Debug "Speichere nginx.conf in $Path\docker\production\nginx.conf"
     Set-Content -Path "$Path\docker\production\nginx.conf" -Value $Content -Encoding UTF8
     Write-Success "nginx.conf wurde erstellt."
@@ -342,17 +600,28 @@ IP.1 = 127.0.0.1
 function New-StartScript {
     param (
         [string]$Path,
-        [string]$DomainName = "localhost"
+        [string]$DomainName = "localhost",
+        [bool]$UseHttps = $true
     )
     Write-Info "Erstelle Start-Skript"
     
-    $startContent = @"
+    if ($UseHttps) {
+        $startContent = @"
 # Kormit Start-Skript
 Write-Host "Starte Kormit..." -ForegroundColor Cyan
 Set-Location -Path `$PSScriptRoot\docker\production
 docker compose up -d
 Write-Host "Kormit wurde gestartet. Sie können auf das Dashboard unter https://$DomainName zugreifen." -ForegroundColor Green
 "@
+    } else {
+        $startContent = @"
+# Kormit Start-Skript
+Write-Host "Starte Kormit..." -ForegroundColor Cyan
+Set-Location -Path `$PSScriptRoot\docker\production
+docker compose up -d
+Write-Host "Kormit wurde gestartet. Sie können auf das Dashboard unter http://$DomainName zugreifen." -ForegroundColor Green
+"@
+    }
     
     Write-Debug "Speichere start.ps1 in $Path\start.ps1"
     Set-Content -Path "$Path\start.ps1" -Value $startContent -Encoding UTF8
@@ -422,6 +691,23 @@ function Install-Kormit {
     
     Write-Section "Konfiguration"
     
+    # HTTP-only-Modus
+    $UseHttps = -not $HttpOnly
+
+    # Frage nach HTTP-only-Modus, falls nicht als Parameter übergeben
+    if ($UseHttps -and -not $Yes) {
+        $useHttpsInput = Read-Host "HTTPS verwenden? (j/N)"
+        if (-not ($useHttpsInput -eq "j" -or $useHttpsInput -eq "J")) {
+            $UseHttps = $false
+            Write-Info "HTTP-only-Modus wurde aktiviert."
+        }
+    }
+    
+    if ($HttpOnly) {
+        Write-Info "HTTP-only-Modus wurde aktiviert."
+        $UseHttps = $false
+    }
+    
     # Installationsverzeichnis - falls nicht als Parameter übergeben und nicht -Yes
     $currentDir = Split-Path -Parent $PSCommandPath
     Write-Debug "Skriptverzeichnis: $currentDir"
@@ -474,14 +760,14 @@ function Install-Kormit {
         Write-Error "docker-compose.yml wurde nicht gefunden. Bitte führen Sie das Skript im Verzeichnis des Projekts aus."
         exit 1
     }
-    New-DockerComposeFile -Path $InstallDir -Content $dockerComposeContent
+    New-DockerComposeFile -Path $InstallDir -Content $dockerComposeContent -HttpPort $HttpPort -HttpsPort $HttpsPort -UseHttps $UseHttps
     
     $nginxConfigContent = Get-Content -Path "$currentDir\docker\production\nginx.conf" -Raw -ErrorAction SilentlyContinue
     if (-not $nginxConfigContent) {
         Write-Error "nginx.conf wurde nicht gefunden. Bitte führen Sie das Skript im Verzeichnis des Projekts aus."
         exit 1
     }
-    New-NginxConfigFile -Path $InstallDir -Content $nginxConfigContent
+    New-NginxConfigFile -Path $InstallDir -Content $nginxConfigContent -DomainName $DomainName -UseHttps $UseHttps
     
     # Zeitzone ermitteln
     $timezone = [System.TimeZoneInfo]::Local.Id
@@ -489,11 +775,15 @@ function Install-Kormit {
     
     New-EnvironmentFile -Path $InstallDir -DomainName $DomainName -TimeZone $timezone -HttpPort $HttpPort -HttpsPort $HttpsPort
     
-    # Erstelle SSL-Zertifikat
-    New-SelfSignedCertificate -Path $InstallDir -DomainName $DomainName
+    # Erstelle SSL-Zertifikat, falls HTTPS aktiviert ist
+    if ($UseHttps) {
+        New-SelfSignedCertificate -Path $InstallDir -DomainName $DomainName
+    } else {
+        Write-Info "HTTP-only-Modus aktiviert, überspringt SSL-Zertifikatserstellung."
+    }
     
     # Erstelle Start- und Stop-Skripte
-    New-StartScript -Path $InstallDir -DomainName $DomainName
+    New-StartScript -Path $InstallDir -DomainName $DomainName -UseHttps $UseHttps
     New-StopScript -Path $InstallDir
     New-UpdateScript -Path $InstallDir
     
@@ -516,8 +806,13 @@ function Install-Kormit {
     Write-Info "Um Kormit zu starten, führen Sie das folgende Skript aus: $InstallDir\start.ps1"
     Write-Info "Um Kormit zu stoppen, führen Sie das folgende Skript aus: $InstallDir\stop.ps1"
     Write-Info "Um Kormit zu aktualisieren, führen Sie das folgende Skript aus: $InstallDir\update.ps1"
-    Write-Info "Sie können auf das Dashboard unter https://$DomainName zugreifen."
-    Write-Warning "Für Produktionsumgebungen ersetzen Sie bitte das selbstsignierte SSL-Zertifikat durch ein gültiges Zertifikat."
+    
+    if ($UseHttps) {
+        Write-Info "Sie können auf das Dashboard unter https://$DomainName zugreifen."
+        Write-Warning "Für Produktionsumgebungen ersetzen Sie bitte das selbstsignierte SSL-Zertifikat durch ein gültiges Zertifikat."
+    } else {
+        Write-Info "Sie können auf das Dashboard unter http://$DomainName zugreifen."
+    }
 }
 
 # Starte die Installation

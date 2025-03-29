@@ -13,6 +13,7 @@ HTTPS_PORT="443"
 AUTO_START=false
 SKIP_CONFIRM=false
 DEBUG=false
+USE_HTTPS=true
 
 # Parameter-Verarbeitung
 while [[ $# -gt 0 ]]; do
@@ -46,6 +47,10 @@ while [[ $# -gt 0 ]]; do
       DEBUG=true
       shift
       ;;
+    --http-only)
+      USE_HTTPS=false
+      shift
+      ;;
     --help|-h)
       echo "Kormit Installer v${VERSION}"
       echo ""
@@ -58,6 +63,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --auto-start             Kormit nach der Installation automatisch starten"
       echo "  --yes, -y                Alle Fragen automatisch mit Ja beantworten"
       echo "  --debug                  Aktiviere Debug-Ausgaben"
+      echo "  --http-only              Nur HTTP verwenden, kein HTTPS"
       echo "  --help, -h               Diese Hilfe anzeigen"
       echo ""
       echo "Beispiel:"
@@ -247,17 +253,29 @@ install_kormit() {
         fi
     fi
     
-    if [ "$HTTPS_PORT" = "443" ] && [ "$SKIP_CONFIRM" = false ]; then
-        read -p "HTTPS-Port [443]: " user_https_port
-        if [ -n "$user_https_port" ]; then
-            HTTPS_PORT="$user_https_port"
+    if [ "$USE_HTTPS" = true ] && [ "$SKIP_CONFIRM" = false ]; then
+        read -p "HTTPS verwenden? (j/N): " use_https
+        if [[ ! "$use_https" =~ ^[jJ]$ ]]; then
+            USE_HTTPS=false
+            log_info "HTTP-only-Modus wurde aktiviert."
+        else
+            if [ "$HTTPS_PORT" = "443" ]; then
+                read -p "HTTPS-Port [443]: " user_https_port
+                if [ -n "$user_https_port" ]; then
+                    HTTPS_PORT="$user_https_port"
+                fi
+            fi
         fi
     fi
     
     log_debug "Installationsverzeichnis: $INSTALL_DIR"
     log_debug "Domain-Name: $DOMAIN_NAME"
     log_debug "HTTP-Port: $HTTP_PORT"
-    log_debug "HTTPS-Port: $HTTPS_PORT"
+    if [ "$USE_HTTPS" = true ]; then
+        log_debug "HTTPS-Port: $HTTPS_PORT"
+    else
+        log_debug "HTTP-only-Modus aktiviert"
+    fi
     
     # Installationsverzeichnis erstellen
     log_debug "Erstelle Installationsverzeichnis $INSTALL_DIR"
@@ -269,12 +287,16 @@ install_kormit() {
     
     log_debug "Erstelle Verzeichnisstruktur"
     mkdir -p docker/production
-    mkdir -p docker/production/ssl
+    if [ "$USE_HTTPS" = true ]; then
+        mkdir -p docker/production/ssl
+    fi
     mkdir -p docker/production/logs
     
     log_debug "Schritt: Erstelle docker-compose.yml"
     # Docker Compose-Datei direkt erstellen
-    cat > docker/production/docker-compose.yml <<EOL
+    if [ "$USE_HTTPS" = true ]; then
+        # Standard-Konfiguration mit HTTPS
+        cat > docker/production/docker-compose.yml <<EOL
 version: '3.8'
 
 services:
@@ -349,10 +371,88 @@ volumes:
   db_data:
     name: \${VOLUME_PREFIX}-db-data
 EOL
+    else
+        # HTTP-only Konfiguration
+        cat > docker/production/docker-compose.yml <<EOL
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: \${VOLUME_PREFIX}-db
+    restart: always
+    environment:
+      POSTGRES_USER: \${DB_USER}
+      POSTGRES_PASSWORD: \${DB_PASSWORD}
+      POSTGRES_DB: \${DB_NAME}
+      TZ: \${TIMEZONE}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - kormit-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \${DB_USER} -d \${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: \${BACKEND_IMAGE}
+    container_name: \${VOLUME_PREFIX}-backend
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://\${DB_USER}:\${DB_PASSWORD}@db:5432/\${DB_NAME}
+      SECRET_KEY: \${SECRET_KEY}
+      DOMAIN_NAME: \${DOMAIN_NAME}
+      TZ: \${TIMEZONE}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - kormit-net
+
+  frontend:
+    image: \${FRONTEND_IMAGE}
+    container_name: \${VOLUME_PREFIX}-frontend
+    restart: always
+    environment:
+      BACKEND_URL: http://backend:8000
+      TZ: \${TIMEZONE}
+    depends_on:
+      - backend
+    networks:
+      - kormit-net
+
+  nginx:
+    image: nginx:alpine
+    container_name: \${VOLUME_PREFIX}-nginx
+    restart: always
+    ports:
+      - "\${HTTP_PORT}:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./logs:/var/log/nginx
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - kormit-net
+
+networks:
+  kormit-net:
+    name: \${NETWORK_NAME}
+
+volumes:
+  db_data:
+    name: \${VOLUME_PREFIX}-db-data
+EOL
+    fi
     
     log_debug "Schritt: Erstelle nginx.conf"
     # Nginx-Konfiguration direkt erstellen
-    cat > docker/production/nginx.conf <<EOL
+    if [ "$USE_HTTPS" = true ]; then
+        # Standard-Konfiguration mit HTTPS
+        cat > docker/production/nginx.conf <<EOL
 server {
     listen 80;
     server_name \${DOMAIN_NAME};
@@ -404,6 +504,42 @@ server {
     error_log /var/log/nginx/error.log;
 }
 EOL
+    else
+        # HTTP-only Konfiguration
+        cat > docker/production/nginx.conf <<EOL
+server {
+    listen 80;
+    server_name \${DOMAIN_NAME};
+
+    # Frontend
+    location / {
+        proxy_pass http://frontend:80;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    # Backend API
+    location /api {
+        proxy_pass http://backend:8000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        
+        # Für WebSockets
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    # Logs
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log;
+}
+EOL
+    fi
     
     log_debug "Schritt: Generiere Passwörter"
     # Zufällige Passwörter generieren
@@ -436,27 +572,28 @@ EOL
     
     log_debug "Schritt: Erstelle SSL-Zertifikat"
     # Self-signed Zertifikat für die erste Einrichtung erstellen
-    log_info "Selbstsigniertes SSL-Zertifikat wird erstellt..."
-    
-    # Verzeichnis erstellen, falls es nicht existiert
-    mkdir -p docker/production/ssl
-    
-    # Prüfen ob OpenSSL verfügbar ist
-    if ! command -v openssl &> /dev/null; then
-        log_error "OpenSSL ist nicht installiert. Das SSL-Zertifikat kann nicht erstellt werden."
-        log_info "Bitte installieren Sie OpenSSL mit 'apt install openssl' oder dem entsprechenden Befehl für Ihre Distribution."
-        exit 1
-    fi
-    
-    # Prüfen ob OpenSSL-Version > 1.1.1
-    OPENSSL_VERSION=$(openssl version | awk '{print $2}')
-    log_debug "OpenSSL Version: $OPENSSL_VERSION"
-    
-    # Immer die Konfigurationsdatei-Methode verwenden, da sie am zuverlässigsten ist
-    log_debug "Verwende Konfigurationsdatei-Methode für OpenSSL"
-    
-    # Konfiguration erstellen
-    cat > docker/production/ssl/openssl.cnf <<EOL
+    if [ "$USE_HTTPS" = true ]; then
+        log_info "Selbstsigniertes SSL-Zertifikat wird erstellt..."
+        
+        # Verzeichnis erstellen, falls es nicht existiert
+        mkdir -p docker/production/ssl
+        
+        # Prüfen ob OpenSSL verfügbar ist
+        if ! command -v openssl &> /dev/null; then
+            log_error "OpenSSL ist nicht installiert. Das SSL-Zertifikat kann nicht erstellt werden."
+            log_info "Bitte installieren Sie OpenSSL mit 'apt install openssl' oder dem entsprechenden Befehl für Ihre Distribution."
+            exit 1
+        fi
+        
+        # Prüfen ob OpenSSL-Version > 1.1.1
+        OPENSSL_VERSION=$(openssl version | awk '{print $2}')
+        log_debug "OpenSSL Version: $OPENSSL_VERSION"
+        
+        # Immer die Konfigurationsdatei-Methode verwenden, da sie am zuverlässigsten ist
+        log_debug "Verwende Konfigurationsdatei-Methode für OpenSSL"
+        
+        # Konfiguration erstellen
+        cat > docker/production/ssl/openssl.cnf <<EOL
 [req]
 distinguished_name = req_distinguished_name
 x509_extensions = v3_req
@@ -477,47 +614,59 @@ DNS.1 = $DOMAIN_NAME
 DNS.2 = localhost
 IP.1 = 127.0.0.1
 EOL
-    
-    # Zertifikat mit Konfigurationsdatei erstellen
-    if openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-        -keyout docker/production/ssl/kormit.key \
-        -out docker/production/ssl/kormit.crt \
-        -config docker/production/ssl/openssl.cnf \
-        -sha256; then
         
-        log_success "SSL-Zertifikat erfolgreich erstellt."
-    else
-        log_error "Fehler beim Erstellen des SSL-Zertifikats."
-        log_info "Versuche alternative Methode..."
-        
-        # Alternative Methode ohne Extensions
+        # Zertifikat mit Konfigurationsdatei erstellen
         if openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
             -keyout docker/production/ssl/kormit.key \
             -out docker/production/ssl/kormit.crt \
-            -subj "/C=DE/ST=State/L=City/O=Organization/CN=$DOMAIN_NAME"; then
+            -config docker/production/ssl/openssl.cnf \
+            -sha256; then
             
-            log_warning "SSL-Zertifikat ohne Subject Alternative Names erstellt."
-            log_info "Das Zertifikat funktioniert möglicherweise nicht in allen Browsern korrekt."
+            log_success "SSL-Zertifikat erfolgreich erstellt."
         else
-            log_error "Konnte kein SSL-Zertifikat erstellen. Die Installation wird fortgesetzt, aber HTTPS funktioniert möglicherweise nicht."
-            touch docker/production/ssl/kormit.key
-            touch docker/production/ssl/kormit.crt
+            log_error "Fehler beim Erstellen des SSL-Zertifikats."
+            log_info "Versuche alternative Methode..."
+            
+            # Alternative Methode ohne Extensions
+            if openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+                -keyout docker/production/ssl/kormit.key \
+                -out docker/production/ssl/kormit.crt \
+                -subj "/C=DE/ST=State/L=City/O=Organization/CN=$DOMAIN_NAME"; then
+                
+                log_warning "SSL-Zertifikat ohne Subject Alternative Names erstellt."
+                log_info "Das Zertifikat funktioniert möglicherweise nicht in allen Browsern korrekt."
+            else
+                log_error "Konnte kein SSL-Zertifikat erstellen. Die Installation wird fortgesetzt, aber HTTPS funktioniert möglicherweise nicht."
+                touch docker/production/ssl/kormit.key
+                touch docker/production/ssl/kormit.crt
+            fi
         fi
+        
+        # Konfigurationsdatei entfernen
+        rm -f docker/production/ssl/openssl.cnf
+        
+        chmod 600 docker/production/ssl/kormit.key
+    else
+        log_info "HTTP-only-Modus aktiviert, überspringt SSL-Zertifikatserstellung."
     fi
-    
-    # Konfigurationsdatei entfernen
-    rm -f docker/production/ssl/openssl.cnf
-    
-    chmod 600 docker/production/ssl/kormit.key
     
     log_debug "Schritt: Erstelle Start-Skript"
     # Start-Skript erstellen
-    cat > start.sh <<EOL
+    if [ "$USE_HTTPS" = true ]; then
+        cat > start.sh <<EOL
 #!/bin/bash
 cd \$(dirname \$0)/docker/production
 docker compose up -d
 echo "Kormit wurde gestartet und ist unter https://$DOMAIN_NAME erreichbar."
 EOL
+    else
+        cat > start.sh <<EOL
+#!/bin/bash
+cd \$(dirname \$0)/docker/production
+docker compose up -d
+echo "Kormit wurde gestartet und ist unter http://$DOMAIN_NAME erreichbar."
+EOL
+    fi
     
     chmod +x start.sh
     
@@ -545,7 +694,7 @@ EOL
     chmod +x update.sh
     
     log_success "Kormit wurde erfolgreich installiert."
-    log_info "Sie können Kormit mit dem Befehl '$INSTALL_DIR/start.sh' starten."
+    log_info "Führen Sie '$INSTALL_DIR/start.sh' aus, um Kormit zu starten."
     
     # Automatischen Start ausführen, falls konfiguriert
     if [ "$AUTO_START" = true ]; then
@@ -592,8 +741,12 @@ main() {
     log_section "Installation abgeschlossen"
     log_success "Kormit wurde erfolgreich installiert!"
     log_info "Führen Sie '$INSTALL_DIR/start.sh' aus, um Kormit zu starten."
-    log_info "Anschließend können Sie Kormit unter https://$DOMAIN_NAME aufrufen."
-    log_warning "Ersetzen Sie das selbstsignierte SSL-Zertifikat für Produktionsumgebungen durch ein gültiges Zertifikat."
+    if [ "$USE_HTTPS" = true ]; then
+        log_info "Anschließend können Sie Kormit unter https://$DOMAIN_NAME aufrufen."
+        log_warning "Ersetzen Sie das selbstsignierte SSL-Zertifikat für Produktionsumgebungen durch ein gültiges Zertifikat."
+    else
+        log_info "Anschließend können Sie Kormit unter http://$DOMAIN_NAME aufrufen."
+    fi
 }
 
 # Skript ausführen

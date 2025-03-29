@@ -317,9 +317,35 @@ Das Schnellstart-Skript bietet ein einfaches Menü zur Verwaltung Ihrer Kormit-I
 - **Bessere Fehlerbehandlung**: Mehrere Fallback-Methoden für den Fall, dass die primäre Zertifikatserstellung fehlschlägt.
 - **Automatisches Failover**: Bei Fehlern wird automatisch auf einfachere Zertifikatsmethoden zurückgegriffen.
 - **Ubuntu 24.04 Unterstützung**: Behebt Probleme mit neueren Ubuntu-Versionen.
+- **HTTP-only Option**: Neue Option `--http-only` für Installationen ohne HTTPS.
 
 ## Änderungen in Version 1.1.0
 
 - **SSL-Zertifikat-Fix**: Die Erstellung der selbstsignierten SSL-Zertifikate wurde verbessert und ist jetzt kompatibel mit verschiedenen OpenSSL-Versionen.
 - **Verbesserte Sicherheit**: Verwendung von SHA-256 für Zertifikate und Hinzufügung von 'localhost' als alternativer Name.
 - **Automatische Anpassung**: Das Installationsskript erkennt die OpenSSL-Version und wählt die passende Methode zur Zertifikatserstellung.
+
+## HTTP-only Modus
+
+Wenn Sie Kormit ohne HTTPS betreiben möchten (z.B. hinter einem Reverse-Proxy oder für Testzwecke), können Sie den HTTP-only-Modus verwenden:
+
+### Linux/MacOS
+
+```bash
+curl -sSL https://raw.githubusercontent.com/kormit-panel/kormit/main/deploy/scripts/install_curl.sh | bash -s -- --http-only
+```
+
+### Windows (PowerShell)
+
+```powershell
+$script = (New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/kormit-panel/kormit/main/deploy/scripts/install_curl.ps1'); 
+Invoke-Expression "$script -HttpOnly"
+```
+
+Im HTTP-only-Modus:
+- Es wird kein SSL-Zertifikat erstellt
+- Nginx wird nur auf Port 80 ausgeführt
+- Es gibt keine Umleitung von HTTP auf HTTPS
+- Die Installation ist einfacher und vermeidet mögliche SSL-Konfigurationsprobleme
+
+**Hinweis:** Für Produktionsumgebungen wird die Verwendung von HTTPS dringend empfohlen.
