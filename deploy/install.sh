@@ -12,6 +12,7 @@ HTTP_PORT="80"
 HTTPS_PORT="443"
 AUTO_START=false
 SKIP_CONFIRM=false
+DEBUG=false
 
 # Parameter-Verarbeitung
 while [[ $# -gt 0 ]]; do
@@ -41,18 +42,23 @@ while [[ $# -gt 0 ]]; do
       SKIP_CONFIRM=true
       shift
       ;;
+    --debug)
+      DEBUG=true
+      shift
+      ;;
     --help|-h)
       echo "Kormit Installer v${VERSION}"
       echo ""
       echo "Verwendung: $0 [Optionen]"
       echo "Optionen:"
-      echo "  --install-dir=DIR   Installationsverzeichnis (Standard: /opt/kormit)"
-      echo "  --domain=DOMAIN     Domain-Name (Standard: localhost)"
-      echo "  --http-port=PORT    HTTP-Port (Standard: 80)"
-      echo "  --https-port=PORT   HTTPS-Port (Standard: 443)"
-      echo "  --auto-start        Kormit nach der Installation automatisch starten"
-      echo "  --yes, -y           Alle Fragen automatisch mit Ja beantworten"
-      echo "  --help, -h          Diese Hilfe anzeigen"
+      echo "  --install-dir=DIR        Installationsverzeichnis (Standard: /opt/kormit)"
+      echo "  --domain=DOMAIN          Domain-Name (Standard: localhost)"
+      echo "  --http-port=PORT         HTTP-Port (Standard: 80)"
+      echo "  --https-port=PORT        HTTPS-Port (Standard: 443)"
+      echo "  --auto-start             Kormit nach der Installation automatisch starten"
+      echo "  --yes, -y                Alle Fragen automatisch mit Ja beantworten"
+      echo "  --debug                  Aktiviere Debug-Ausgaben"
+      echo "  --help, -h               Diese Hilfe anzeigen"
       echo ""
       echo "Beispiel:"
       echo "  $0 --domain=example.com --install-dir=/var/kormit --auto-start"
@@ -97,6 +103,12 @@ log_error() {
 log_section() {
     echo -e "${MAGENTA}▶️  $1 ${NC}"
     echo -e "${MAGENTA}   $(printf '─%.0s' {1..50}) ${NC}"
+}
+
+log_debug() {
+    if [ "$DEBUG" = true ]; then
+        echo -e "${CYAN}🔍 [DEBUG] ${NC} $1"
+    fi
 }
 
 # Hilfsfunktion zur Überprüfung der Ausführung als Root
@@ -242,34 +254,46 @@ install_kormit() {
         fi
     fi
     
+    log_debug "Installationsverzeichnis: $INSTALL_DIR"
+    log_debug "Domain-Name: $DOMAIN_NAME"
+    log_debug "HTTP-Port: $HTTP_PORT"
+    log_debug "HTTPS-Port: $HTTPS_PORT"
+    
     # Installationsverzeichnis erstellen
+    log_debug "Erstelle Installationsverzeichnis $INSTALL_DIR"
     mkdir -p $INSTALL_DIR
     cd $INSTALL_DIR
     
     # Produktionskonfiguration erstellen
     log_info "Konfigurationsdateien werden erstellt..."
     
+    log_debug "Erstelle Verzeichnisstruktur"
     mkdir -p docker/production
     mkdir -p docker/production/ssl
     mkdir -p docker/production/logs
     
+    log_debug "Schritt: Erstelle docker-compose.yml"
     # Docker Compose-Datei erstellen
     cat > docker/production/docker-compose.yml <<EOL
 $(cat $SCRIPT_DIR/docker/production/docker-compose.yml)
 EOL
     
+    log_debug "Schritt: Erstelle nginx.conf"
     # Nginx-Konfiguration erstellen
     cat > docker/production/nginx.conf <<EOL
 $(cat $SCRIPT_DIR/docker/production/nginx.conf)
 EOL
     
+    log_debug "Schritt: Generiere Passwörter"
     # Zufällige Passwörter generieren
     DB_PASSWORD=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | fold -w 16 | head -n 1)
     SECRET_KEY=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | fold -w 32 | head -n 1)
     
+    log_debug "Schritt: Ermittle Timezone"
     # Timezone ermitteln
     TIMEZONE=$(timedatectl show --property=Timezone --value 2>/dev/null || echo "UTC")
     
+    log_debug "Schritt: Erstelle .env"
     # Umgebungsvariablen-Datei erstellen
     cat > docker/production/.env <<EOL
 # Kormit-Konfiguration
@@ -289,6 +313,7 @@ BACKEND_IMAGE=ghcr.io/kormit-panel/kormit/kormit-backend:latest
 FRONTEND_IMAGE=ghcr.io/kormit-panel/kormit/kormit-frontend:latest
 EOL
     
+    log_debug "Schritt: Erstelle SSL-Zertifikat"
     # Self-signed Zertifikat für die erste Einrichtung erstellen
     log_info "Selbstsigniertes SSL-Zertifikat wird erstellt..."
     
@@ -300,6 +325,7 @@ EOL
     
     chmod 600 docker/production/ssl/kormit.key
     
+    log_debug "Schritt: Erstelle Start-Skript"
     # Start-Skript erstellen
     cat > start.sh <<EOL
 #!/bin/bash
@@ -310,6 +336,7 @@ EOL
     
     chmod +x start.sh
     
+    log_debug "Schritt: Erstelle Stop-Skript"
     # Stop-Skript erstellen
     cat > stop.sh <<EOL
 #!/bin/bash
@@ -320,6 +347,7 @@ EOL
     
     chmod +x stop.sh
     
+    log_debug "Schritt: Erstelle Update-Skript"
     # Update-Skript erstellen
     cat > update.sh <<EOL
 #!/bin/bash
@@ -361,6 +389,7 @@ main() {
     
     # Skriptverzeichnis speichern
     SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+    log_debug "Skriptverzeichnis: $SCRIPT_DIR"
     
     # Als Root ausführen
     check_root
