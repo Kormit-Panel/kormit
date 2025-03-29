@@ -19,15 +19,15 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: '1.24.1'
           
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '16'
           
@@ -139,43 +139,67 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           
-      - name: Push Images to Registry
+      - name: Push Backend Image (if possible)
         if: github.event_name != 'pull_request'
+        continue-on-error: true
         run: |
-          echo "Versuche, Images in die Registry zu pushen..."
-          
-          # Lade die erstellten Images
           docker load --input /tmp/kormit-backend.tar
-          docker load --input /tmp/kormit-frontend.tar
+          docker push ${{ steps.meta-backend.outputs.tags }}
           
-          # Versuche zu pushen, mit Fehlerbehandlung
-          if docker push ${{ steps.meta-backend.outputs.tags }}; then
-            echo "Backend-Image erfolgreich gepusht"
-          else
-            echo "Fehler beim Pushen des Backend-Images. Möglicherweise ein Berechtigungsproblem mit der Registry."
-            echo "Bitte stellen Sie sicher, dass in den Repository-Einstellungen die korrekten Berechtigungen gesetzt sind:"
-            echo "1. Gehen Sie zu Settings -> Packages"
-            echo "2. Fügen Sie den GitHub Actions-Workflow hinzu und geben Sie Schreibrechte"
-          fi
-          
-          if docker push ${{ steps.meta-frontend.outputs.tags }}; then
-            echo "Frontend-Image erfolgreich gepusht"
-          else
-            echo "Fehler beim Pushen des Frontend-Images."
-          fi
-          
-      - name: Save Docker images as artifacts
+      - name: Push Frontend Image (if possible)
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
         run: |
-          mkdir -p docker-images
-          cp /tmp/kormit-backend.tar docker-images/
-          cp /tmp/kormit-frontend.tar docker-images/
-          echo "Docker-Images wurden als Artefakte gespeichert und können manuell geladen werden mit:"
-          echo "docker load --input kormit-backend.tar"
-          echo "docker load --input kormit-frontend.tar"
+          docker load --input /tmp/kormit-frontend.tar
+          docker push ${{ steps.meta-frontend.outputs.tags }}
+          
+      - name: Create Local Build Artifacts
+        run: |
+          mkdir -p artifacts
+          # Tar-Dateien in das Artefakt-Verzeichnis kopieren
+          cp /tmp/kormit-backend.tar artifacts/
+          cp /tmp/kormit-frontend.tar artifacts/
+          
+          # Skript zum Laden der Docker-Images erstellen
+          echo '#!/bin/bash
+          echo "Lade Docker-Images..."
+          docker load --input kormit-backend.tar
+          docker load --input kormit-frontend.tar
+          
+          echo "Images geladen. Sie können sie jetzt mit diesen Befehlen ausführen:"
+          echo "docker run -p 8080:8080 $(docker images -q | head -n 1)"
+          echo "docker run -p 8081:80 $(docker images -q | head -n 2 | tail -n 1)"
+          ' > artifacts/load-images.sh
+          
+          chmod +x artifacts/load-images.sh
+          
+          # README mit Anweisungen erstellen
+          echo '# Kormit Docker Images
+          
+          Diese Artefakte enthalten die gebauten Docker-Images für das Kormit-Projekt.
+          
+          ## Verwendung
+          
+          1. Extrahieren Sie die Artefakte
+          2. Führen Sie das Skript `load-images.sh` aus:
+          
+          ```bash
+          ./load-images.sh
+          ```
+          
+          3. Alternativ können Sie die Images manuell laden:
+          
+          ```bash
+          docker load --input kormit-backend.tar
+          docker load --input kormit-frontend.tar
+          ```
+          
+          4. Die Images sollten jetzt in Ihrer lokalen Docker-Installation verfügbar sein.
+          ' > artifacts/README.md
           
       - name: Upload Docker images as artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: docker-images
-          path: docker-images/
+          name: kormit-docker-images
+          path: artifacts/
           retention-days: 1 
