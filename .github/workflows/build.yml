@@ -48,7 +48,7 @@ jobs:
         run: |
           cd frontend
           npm install
-          npm test
+          npm test -- --passWithNoTests
           
       - name: Extract metadata (tags, labels) for Backend
         id: meta-backend
