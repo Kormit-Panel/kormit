@@ -17,9 +17,23 @@ Dieses Verzeichnis enthält Skripte und Konfigurationen zur Installation von Kor
 ### Linux (Ubuntu, Debian, CentOS, RHEL)
 
 ```bash
-# Als Root-Benutzer ausführen
-curl -fsSL https://github.com/Kormit-Panel/kormit/raw/refs/heads/main/deploy/install.sh | sudo bash
+# Standard-Installation (interaktiv)
+curl -fsSL https://raw.githubusercontent.com/yourusername/kormit/main/deploy/install.sh | sudo bash
+
+# Mit GitHub-Token (nicht-interaktiv)
+curl -fsSL https://raw.githubusercontent.com/yourusername/kormit/main/deploy/install.sh | sudo bash -s -- --username=GITHUB_USERNAME --token=GITHUB_TOKEN --auto-start
 ```
+
+Parameter für das Linux-Installationsskript:
+
+| Parameter | Beschreibung | Standardwert |
+|-----------|--------------|--------------|
+| `--username=NAME` | GitHub-Benutzername für die Authentifizierung | - |
+| `--token=TOKEN` | GitHub Personal Access Token | - |
+| `--install-dir=DIR` | Installationsverzeichnis | `/opt/kormit` |
+| `--domain=DOMAIN` | Domain-Name oder IP-Adresse | `localhost` |
+| `--auto-start` | Kormit nach der Installation automatisch starten | - |
+| `--help` | Hilfe anzeigen | - |
 
 Nach der Installation:
 
@@ -40,11 +54,27 @@ Nach der Installation:
 2. Installationsskript herunterladen und ausführen:
 
 ```powershell
-# PowerShell als Administrator ausführen
-Invoke-WebRequest -Uri "https://github.com/Kormit-Panel/kormit/raw/refs/heads/main/deploy/install.ps1" -OutFile "$env:TEMP\install.ps1"
+# Standard-Installation (interaktiv)
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/yourusername/kormit/main/deploy/install.ps1" -OutFile "$env:TEMP\install.ps1"
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 & "$env:TEMP\install.ps1"
+
+# Mit GitHub-Token (nicht-interaktiv)
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/yourusername/kormit/main/deploy/install.ps1" -OutFile "$env:TEMP\install.ps1"
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+& "$env:TEMP\install.ps1" -GitHubUsername "GITHUB_USERNAME" -GitHubToken "GITHUB_TOKEN" -AutoStart
 ```
+
+Parameter für das Windows-Installationsskript:
+
+| Parameter | Beschreibung | Standardwert |
+|-----------|--------------|--------------|
+| `-GitHubUsername` | GitHub-Benutzername für die Authentifizierung | - |
+| `-GitHubToken` | GitHub Personal Access Token | - |
+| `-InstallDir` | Installationsverzeichnis | `C:\kormit` |
+| `-DomainName` | Domain-Name oder IP-Adresse | `localhost` |
+| `-AutoStart` | Kormit nach der Installation automatisch starten | - |
+| `-Help` | Hilfe anzeigen | - |
 
 Nach der Installation:
 
@@ -76,9 +106,19 @@ Da Kormit in einem privaten Repository gehostet wird, benötigen Sie Anmeldedate
 4. Wählen Sie mindestens die Berechtigung `read:packages`
 5. Klicken Sie auf "Generate token" und speichern Sie das Token sicher
 
-### Manuelle Anmeldung
+### Anmeldung über die Kommandozeile
 
-Die Installationsskripte enthalten eine interaktive Abfrage zur Authentifizierung. Falls Sie die manuelle Anmeldung bevorzugen:
+Sie können das GitHub-Token direkt bei der Installation als Parameter übergeben:
+
+```bash
+# Linux
+curl -fsSL https://raw.githubusercontent.com/yourusername/kormit/main/deploy/install.sh | sudo bash -s -- --username=GITHUB_USERNAME --token=GITHUB_TOKEN
+
+# Windows PowerShell
+& "$env:TEMP\install.ps1" -GitHubUsername "GITHUB_USERNAME" -GitHubToken "GITHUB_TOKEN"
+```
+
+Alternativ können Sie sich manuell anmelden:
 
 ```bash
 # Linux

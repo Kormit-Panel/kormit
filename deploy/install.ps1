@@ -1,8 +1,39 @@
 # Kormit Installationsskript für Windows
 # Dieses Skript installiert Kormit auf einem Windows-Server mit Docker Desktop
-# Mit Unterstützung für private Repositories
 
-# Farbige Ausgabe
+# Version
+$Version = "1.0.0"
+
+param (
+    [string]$InstallDir = "C:\kormit",
+    [string]$DomainName = "localhost",
+    [string]$HttpPort = "80",
+    [string]$HttpsPort = "443",
+    [switch]$AutoStart,
+    [switch]$Yes,
+    [switch]$Help
+)
+
+# Hilfe anzeigen
+if ($Help) {
+    Write-Host "Kormit Installer v$Version"
+    Write-Host ""
+    Write-Host "Verwendung: .\install.ps1 [Optionen]"
+    Write-Host "Optionen:"
+    Write-Host "  -InstallDir DIR           Installationsverzeichnis (Standard: C:\kormit)"
+    Write-Host "  -DomainName DOMAIN        Domain-Name (Standard: localhost)"
+    Write-Host "  -HttpPort PORT            HTTP-Port (Standard: 80)"
+    Write-Host "  -HttpsPort PORT           HTTPS-Port (Standard: 443)"
+    Write-Host "  -AutoStart                Kormit nach der Installation automatisch starten"
+    Write-Host "  -Yes                      Alle Fragen automatisch mit Ja beantworten"
+    Write-Host "  -Help                     Diese Hilfe anzeigen"
+    Write-Host ""
+    Write-Host "Beispiel:"
+    Write-Host "  .\install.ps1 -DomainName example.com -InstallDir D:\kormit -AutoStart"
+    exit 0
+}
+
+# Farbige Ausgabe und Unicode-Symbole
 function Write-ColorOutput {
     param (
         [string]$Message,
@@ -15,28 +46,38 @@ function Write-Info {
     param (
         [string]$Message
     )
-    Write-ColorOutput "[INFO] $Message" -Color Cyan
+    Write-ColorOutput "ℹ️  $Message" -Color Cyan
 }
 
 function Write-Success {
     param (
         [string]$Message
     )
-    Write-ColorOutput "[SUCCESS] $Message" -Color Green
+    Write-ColorOutput "✅ $Message" -Color Green
 }
 
 function Write-Warning {
     param (
         [string]$Message
     )
-    Write-ColorOutput "[WARNING] $Message" -Color Yellow
+    Write-ColorOutput "⚠️  $Message" -Color Yellow
 }
 
 function Write-Error {
     param (
         [string]$Message
     )
-    Write-ColorOutput "[ERROR] $Message" -Color Red
+    Write-ColorOutput "❌ $Message" -Color Red
+}
+
+function Write-Section {
+    param (
+        [string]$Title
+    )
+    
+    Write-Host ""
+    Write-Host "▶️  $Title" -ForegroundColor Magenta
+    Write-Host ("   " + ("-" * 50)) -ForegroundColor Magenta
 }
 
 # Prüfe Administrator-Rechte
@@ -85,42 +126,6 @@ function Test-DockerCompose {
     }
 }
 
-# GitHub Container Registry-Authentifizierung konfigurieren
-function Set-GitHubAuth {
-    Write-Info "GitHub Container Registry Authentifizierung wird konfiguriert..."
-    
-    $githubAuth = Read-Host "Möchten Sie sich bei GitHub Container Registry anmelden? (j/N)"
-    if ($githubAuth -eq "j" -or $githubAuth -eq "J") {
-        Write-Info "GitHub Anmeldedaten werden eingerichtet..."
-        
-        $githubUsername = Read-Host "GitHub Benutzername"
-        $githubToken = Read-Host "GitHub Personal Access Token (mit read:packages-Berechtigung)" -AsSecureString
-        $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($githubToken)
-        $githubTokenPlain = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
-        [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
-        
-        if ([string]::IsNullOrEmpty($githubUsername) -or [string]::IsNullOrEmpty($githubTokenPlain)) {
-            Write-Warning "Benutzername oder Token fehlt. Die Anmeldung wird übersprungen."
-            return $false
-        }
-        
-        try {
-            $loginOutput = $githubTokenPlain | docker login ghcr.io -u $githubUsername --password-stdin
-            Write-Success "GitHub Container Registry Anmeldung erfolgreich."
-            return $true
-        }
-        catch {
-            Write-Error "GitHub Container Registry Anmeldung fehlgeschlagen."
-            Write-Warning "Die Installation wird fortgesetzt, aber Sie müssen möglicherweise manuell Anmeldedaten konfigurieren."
-            return $false
-        }
-    }
-    else {
-        Write-Info "GitHub Anmeldung übersprungen. Wenn die Images privat sind, müssen Sie sich manuell anmelden."
-        return $false
-    }
-}
-
 # Installationsverzeichnis erstellen
 function New-InstallationDirectory {
     param (
@@ -146,7 +151,7 @@ function New-DockerComposeFile {
         [string]$Content
     )
     Write-Info "Erstelle docker-compose.yml"
-    Set-Content -Path "$Path\docker\production\docker-compose.yml" -Value $Content
+    Set-Content -Path "$Path\docker\production\docker-compose.yml" -Value $Content -Encoding UTF8
     Write-Success "docker-compose.yml wurde erstellt."
 }
 
@@ -157,7 +162,7 @@ function New-NginxConfigFile {
         [string]$Content
     )
     Write-Info "Erstelle nginx.conf"
-    Set-Content -Path "$Path\docker\production\nginx.conf" -Value $Content
+    Set-Content -Path "$Path\docker\production\nginx.conf" -Value $Content -Encoding UTF8
     Write-Success "nginx.conf wurde erstellt."
 }
 
@@ -166,7 +171,9 @@ function New-EnvironmentFile {
     param (
         [string]$Path,
         [string]$DomainName = "localhost",
-        [string]$TimeZone = "UTC"
+        [string]$TimeZone = "UTC",
+        [string]$HttpPort = "80",
+        [string]$HttpsPort = "443"
     )
     Write-Info "Erstelle .env-Datei"
     
@@ -184,13 +191,15 @@ DOMAIN_NAME=$DomainName
 TIMEZONE=$TimeZone
 VOLUME_PREFIX=kormit
 NETWORK_NAME=kormit-network
+HTTP_PORT=$HttpPort
+HTTPS_PORT=$HttpsPort
 
 # Image-Konfiguration
-BACKEND_IMAGE=ghcr.io/kormit-panel/kormit/kormit-backend:main
-FRONTEND_IMAGE=ghcr.io/kormit-panel/kormit/kormit-frontend:main
+BACKEND_IMAGE=kormit/kormit-backend:latest
+FRONTEND_IMAGE=kormit/kormit-frontend:latest
 "@
     
-    Set-Content -Path "$Path\docker\production\.env" -Value $envContent
+    Set-Content -Path "$Path\docker\production\.env" -Value $envContent -Encoding UTF8
     Write-Success ".env-Datei wurde erstellt."
 }
 
@@ -227,7 +236,7 @@ DNS.1 = $DomainName
 IP.1 = 127.0.0.1
 "@
     
-    Set-Content -Path $openSSLPath -Value $openSSLConfig
+    Set-Content -Path $openSSLPath -Value $openSSLConfig -Encoding UTF8
     
     # Prüfen, ob OpenSSL verfügbar ist
     try {
@@ -246,7 +255,6 @@ IP.1 = 127.0.0.1
             # Windows-eigenes Zertifikat erstellen
             $cert = New-SelfSignedCertificate -DnsName $DomainName -CertStoreLocation "Cert:\LocalMachine\My"
             $certPassword = ConvertTo-SecureString -String "kormit" -Force -AsPlainText
-            $certPath = "$Path\docker\production\ssl"
             
             # PFX exportieren
             Export-PfxCertificate -Cert "Cert:\LocalMachine\My\$($cert.Thumbprint)" -FilePath "$certPath\kormit.pfx" -Password $certPassword
@@ -256,8 +264,8 @@ IP.1 = 127.0.0.1
             $pfxContent = [System.Convert]::ToBase64String($pfxBytes)
             
             # Platzhalter für Nginx erstellen
-            Set-Content -Path "$certPath\kormit.key" -Value "-----BEGIN PRIVATE KEY-----`n-----END PRIVATE KEY-----"
-            Set-Content -Path "$certPath\kormit.crt" -Value "-----BEGIN CERTIFICATE-----`n-----END CERTIFICATE-----"
+            Set-Content -Path "$certPath\kormit.key" -Value "-----BEGIN PRIVATE KEY-----`n-----END PRIVATE KEY-----" -Encoding UTF8
+            Set-Content -Path "$certPath\kormit.crt" -Value "-----BEGIN CERTIFICATE-----`n-----END CERTIFICATE-----" -Encoding UTF8
             
             Write-Info "Sie müssen das generierte PFX-Zertifikat in die richtigen Formate für Nginx konvertieren."
             Write-Info "PFX-Passwort: kormit"
@@ -269,8 +277,8 @@ IP.1 = 127.0.0.1
             Write-Info "Bitte erstellen Sie ein SSL-Zertifikat und legen Sie es unter $certPath\kormit.key und $certPath\kormit.crt ab."
             
             # Leere Zertifikatsdateien erstellen als Platzhalter
-            Set-Content -Path "$certPath\kormit.key" -Value "# Platzhalter für SSL-Schlüssel"
-            Set-Content -Path "$certPath\kormit.crt" -Value "# Platzhalter für SSL-Zertifikat"
+            Set-Content -Path "$certPath\kormit.key" -Value "# Platzhalter für SSL-Schlüssel" -Encoding UTF8
+            Set-Content -Path "$certPath\kormit.crt" -Value "# Platzhalter für SSL-Zertifikat" -Encoding UTF8
         }
     }
     
@@ -294,7 +302,7 @@ docker compose up -d
 Write-Host "Kormit wurde gestartet. Sie können auf das Dashboard unter https://$DomainName zugreifen." -ForegroundColor Green
 "@
     
-    Set-Content -Path "$Path\start.ps1" -Value $startContent
+    Set-Content -Path "$Path\start.ps1" -Value $startContent -Encoding UTF8
     Write-Success "Start-Skript wurde erstellt."
 }
 
@@ -313,7 +321,7 @@ docker compose down
 Write-Host "Kormit wurde gestoppt." -ForegroundColor Green
 "@
     
-    Set-Content -Path "$Path\stop.ps1" -Value $stopContent
+    Set-Content -Path "$Path\stop.ps1" -Value $stopContent -Encoding UTF8
     Write-Success "Stop-Skript wurde erstellt."
 }
 
@@ -333,40 +341,22 @@ docker compose up -d
 Write-Host "Kormit wurde aktualisiert." -ForegroundColor Green
 "@
     
-    Set-Content -Path "$Path\update.ps1" -Value $updateContent
+    Set-Content -Path "$Path\update.ps1" -Value $updateContent -Encoding UTF8
     Write-Success "Update-Skript wurde erstellt."
-}
-
-# Test der Docker-Images
-function Test-DockerImages {
-    Write-Info "Teste den Zugriff auf die Docker-Images..."
-    
-    try {
-        docker pull ghcr.io/kormit-panel/kormit/kormit-backend:main | Out-Null
-        Write-Success "Backend-Image ist verfügbar."
-        $backendAvailable = $true
-    }
-    catch {
-        Write-Warning "Backend-Image konnte nicht abgerufen werden. Überprüfen Sie Ihre Anmeldedaten."
-        $backendAvailable = $false
-    }
-    
-    try {
-        docker pull ghcr.io/kormit-panel/kormit/kormit-frontend:main | Out-Null
-        Write-Success "Frontend-Image ist verfügbar."
-        $frontendAvailable = $true
-    }
-    catch {
-        Write-Warning "Frontend-Image konnte nicht abgerufen werden. Überprüfen Sie Ihre Anmeldedaten."
-        $frontendAvailable = $false
-    }
-    
-    return ($backendAvailable -and $frontendAvailable)
 }
 
 # Hauptfunktion
 function Install-Kormit {
-    Write-ColorOutput "=== Kormit Installation für Windows ===" -Color Magenta
+    Clear-Host
+    
+    # Titelblock
+    Write-Host ""
+    Write-Host "╔═══════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║                 KORMIT INSTALLER v$Version                  ║" -ForegroundColor Cyan
+    Write-Host "╚═══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host ""
+    
+    Write-Section "System wird vorbereitet"
     
     # Prüfe Voraussetzungen
     if (-not (Test-Docker)) {
@@ -375,34 +365,47 @@ function Install-Kormit {
     
     Test-DockerCompose
     
-    # GitHub Container Registry-Authentifizierung
-    $githubAuthConfigured = Set-GitHubAuth
+    Write-Section "Konfiguration"
     
-    if ($githubAuthConfigured) {
-        $imagesAvailable = Test-DockerImages
-        if (-not $imagesAvailable) {
-            Write-Warning "Einige Docker-Images sind nicht verfügbar. Die Installation wird trotzdem fortgesetzt."
+    # Installationsverzeichnis - falls nicht als Parameter übergeben und nicht -Yes
+    $currentDir = Split-Path -Parent $PSCommandPath
+    
+    # Frage nach dem Installationsverzeichnis, falls nicht als Parameter übergeben
+    if ($InstallDir -eq "C:\kormit" -and -not $Yes) {
+        $userInstallDir = Read-Host "Installationsverzeichnis [$InstallDir]"
+        if ($userInstallDir) {
+            $InstallDir = $userInstallDir
         }
     }
     
-    # Installationsverzeichnis
-    $installDir = "C:\kormit"
-    $currentDir = Split-Path -Parent $PSCommandPath
-    
-    # Frage nach dem Installationsverzeichnis
-    $userInstallDir = Read-Host "Installationsverzeichnis [$installDir]"
-    if ($userInstallDir) {
-        $installDir = $userInstallDir
+    # Frage nach Domain-Namen, falls nicht als Parameter übergeben
+    if ($DomainName -eq "localhost" -and -not $Yes) {
+        $userDomain = Read-Host "Domain-Name für Kormit [$DomainName]"
+        if ($userDomain) {
+            $DomainName = $userDomain
+        }
     }
     
-    # Frage nach Domain-Namen
-    $domainName = Read-Host "Domain-Name für Kormit [localhost]"
-    if (-not $domainName) {
-        $domainName = "localhost"
+    # Frage nach HTTP-Port, falls nicht als Parameter übergeben
+    if ($HttpPort -eq "80" -and -not $Yes) {
+        $userHttpPort = Read-Host "HTTP-Port [$HttpPort]"
+        if ($userHttpPort) {
+            $HttpPort = $userHttpPort
+        }
     }
+    
+    # Frage nach HTTPS-Port, falls nicht als Parameter übergeben
+    if ($HttpsPort -eq "443" -and -not $Yes) {
+        $userHttpsPort = Read-Host "HTTPS-Port [$HttpsPort]"
+        if ($userHttpsPort) {
+            $HttpsPort = $userHttpsPort
+        }
+    }
+    
+    Write-Section "Installation"
     
     # Erstelle Verzeichnisse
-    New-InstallationDirectory -Path $installDir
+    New-InstallationDirectory -Path $InstallDir
     
     # Erstelle Konfigurationsdateien
     $dockerComposeContent = Get-Content -Path "$currentDir\docker\production\docker-compose.yml" -Raw -ErrorAction SilentlyContinue
@@ -410,42 +413,48 @@ function Install-Kormit {
         Write-Error "docker-compose.yml wurde nicht gefunden. Bitte führen Sie das Skript im Verzeichnis des Projekts aus."
         exit 1
     }
-    New-DockerComposeFile -Path $installDir -Content $dockerComposeContent
+    New-DockerComposeFile -Path $InstallDir -Content $dockerComposeContent
     
     $nginxConfigContent = Get-Content -Path "$currentDir\docker\production\nginx.conf" -Raw -ErrorAction SilentlyContinue
     if (-not $nginxConfigContent) {
         Write-Error "nginx.conf wurde nicht gefunden. Bitte führen Sie das Skript im Verzeichnis des Projekts aus."
         exit 1
     }
-    New-NginxConfigFile -Path $installDir -Content $nginxConfigContent
+    New-NginxConfigFile -Path $InstallDir -Content $nginxConfigContent
     
     # Zeitzone ermitteln
     $timezone = [System.TimeZoneInfo]::Local.Id
     
-    New-EnvironmentFile -Path $installDir -DomainName $domainName -TimeZone $timezone
+    New-EnvironmentFile -Path $InstallDir -DomainName $DomainName -TimeZone $timezone -HttpPort $HttpPort -HttpsPort $HttpsPort
     
     # Erstelle SSL-Zertifikat
-    New-SelfSignedCertificate -Path $installDir -DomainName $domainName
+    New-SelfSignedCertificate -Path $InstallDir -DomainName $DomainName
     
     # Erstelle Start- und Stop-Skripte
-    New-StartScript -Path $installDir -DomainName $domainName
-    New-StopScript -Path $installDir
-    New-UpdateScript -Path $installDir
+    New-StartScript -Path $InstallDir -DomainName $DomainName
+    New-StopScript -Path $InstallDir
+    New-UpdateScript -Path $InstallDir
     
-    # Frage, ob Kormit jetzt gestartet werden soll
-    $startNow = Read-Host "Möchten Sie Kormit jetzt starten? (j/N)"
-    if ($startNow -eq "j" -or $startNow -eq "J") {
-        Write-Info "Kormit wird gestartet..."
-        & "$installDir\start.ps1"
+    # Kormit starten, falls gewünscht
+    if ($AutoStart) {
+        Write-Info "Kormit wird automatisch gestartet..."
+        & "$InstallDir\start.ps1"
+    } elseif (-not $Yes) {
+        # Frage, ob Kormit jetzt gestartet werden soll
+        $startNow = Read-Host "Möchten Sie Kormit jetzt starten? (j/N)"
+        if ($startNow -eq "j" -or $startNow -eq "J") {
+            Write-Info "Kormit wird gestartet..."
+            & "$InstallDir\start.ps1"
+        }
     }
     
     # Zusammenfassung
-    Write-ColorOutput "`n=== Installation abgeschlossen ===" -Color Magenta
-    Write-Success "Kormit wurde erfolgreich installiert unter: $installDir"
-    Write-Info "Um Kormit zu starten, führen Sie das folgende Skript aus: $installDir\start.ps1"
-    Write-Info "Um Kormit zu stoppen, führen Sie das folgende Skript aus: $installDir\stop.ps1"
-    Write-Info "Um Kormit zu aktualisieren, führen Sie das folgende Skript aus: $installDir\update.ps1"
-    Write-Info "Sie können auf das Dashboard unter https://$domainName zugreifen."
+    Write-Section "Installation abgeschlossen"
+    Write-Success "Kormit wurde erfolgreich installiert unter: $InstallDir"
+    Write-Info "Um Kormit zu starten, führen Sie das folgende Skript aus: $InstallDir\start.ps1"
+    Write-Info "Um Kormit zu stoppen, führen Sie das folgende Skript aus: $InstallDir\stop.ps1"
+    Write-Info "Um Kormit zu aktualisieren, führen Sie das folgende Skript aus: $InstallDir\update.ps1"
+    Write-Info "Sie können auf das Dashboard unter https://$DomainName zugreifen."
     Write-Warning "Für Produktionsumgebungen ersetzen Sie bitte das selbstsignierte SSL-Zertifikat durch ein gültiges Zertifikat."
 }
 

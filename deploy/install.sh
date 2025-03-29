@@ -1,7 +1,70 @@
 #!/bin/bash
-# Kormit Installationsskript für ein leeres Linux-System
+# Kormit Installationsskript für Linux
 # Unterstützt: Ubuntu, Debian, CentOS, RHEL
-# Mit Unterstützung für private Repositories
+
+# Version
+VERSION="1.0.0"
+
+# Parameter verarbeiten
+INSTALL_DIR="/opt/kormit"
+DOMAIN_NAME="localhost"
+HTTP_PORT="80"
+HTTPS_PORT="443"
+AUTO_START=false
+SKIP_CONFIRM=false
+
+# Parameter-Verarbeitung
+while [[ $# -gt 0 ]]; do
+  key="$1"
+  case $key in
+    --install-dir=*)
+      INSTALL_DIR="${key#*=}"
+      shift
+      ;;
+    --domain=*)
+      DOMAIN_NAME="${key#*=}"
+      shift
+      ;;
+    --http-port=*)
+      HTTP_PORT="${key#*=}"
+      shift
+      ;;
+    --https-port=*)
+      HTTPS_PORT="${key#*=}"
+      shift
+      ;;
+    --auto-start)
+      AUTO_START=true
+      shift
+      ;;
+    --yes|-y)
+      SKIP_CONFIRM=true
+      shift
+      ;;
+    --help|-h)
+      echo "Kormit Installer v${VERSION}"
+      echo ""
+      echo "Verwendung: $0 [Optionen]"
+      echo "Optionen:"
+      echo "  --install-dir=DIR   Installationsverzeichnis (Standard: /opt/kormit)"
+      echo "  --domain=DOMAIN     Domain-Name (Standard: localhost)"
+      echo "  --http-port=PORT    HTTP-Port (Standard: 80)"
+      echo "  --https-port=PORT   HTTPS-Port (Standard: 443)"
+      echo "  --auto-start        Kormit nach der Installation automatisch starten"
+      echo "  --yes, -y           Alle Fragen automatisch mit Ja beantworten"
+      echo "  --help, -h          Diese Hilfe anzeigen"
+      echo ""
+      echo "Beispiel:"
+      echo "  $0 --domain=example.com --install-dir=/var/kormit --auto-start"
+      exit 0
+      ;;
+    *)
+      echo "Unbekannte Option: $1"
+      echo "Verwenden Sie --help für Hilfe."
+      exit 1
+      ;;
+  esac
+done
 
 set -e
 
@@ -10,23 +73,30 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Logging-Funktionen
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    echo -e "${BLUE}ℹ️  ${NC} $1"
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    echo -e "${GREEN}✅ ${NC} $1"
 }
 
 log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
+    echo -e "${YELLOW}⚠️  ${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    echo -e "${RED}❌ ${NC} $1"
+}
+
+log_section() {
+    echo -e "${MAGENTA}▶️  $1 ${NC}"
+    echo -e "${MAGENTA}   $(printf '─%.0s' {1..50}) ${NC}"
 }
 
 # Hilfsfunktion zur Überprüfung der Ausführung als Root
@@ -68,17 +138,17 @@ install_docker() {
                 curl -fsSL https://download.docker.com/linux/$OS/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
                 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/$OS $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
                 apt update
-                apt install -y docker-ce docker-ce-cli containerd.io
+                apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
                 ;;
             centos|rhel|fedora)
                 yum install -y yum-utils
                 yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-                yum install -y docker-ce docker-ce-cli containerd.io
+                yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
                 systemctl start docker
                 systemctl enable docker
                 ;;
             *)
-                log_error "Unsupported OS: $OS"
+                log_error "Nicht unterstütztes Betriebssystem: $OS"
                 exit 1
                 ;;
         esac
@@ -109,37 +179,6 @@ install_docker_compose() {
     fi
 }
 
-# GitHub Container Registry-Authentifizierung konfigurieren
-configure_ghcr_auth() {
-    log_info "GitHub Container Registry Authentifizierung wird konfiguriert..."
-    
-    read -p "Möchten Sie sich bei GitHub Container Registry anmelden? (j/N): " github_auth
-    if [[ "$github_auth" =~ ^[jJ]$ ]]; then
-        log_info "GitHub Anmeldedaten werden eingerichtet..."
-        
-        read -p "GitHub Benutzername: " github_username
-        read -sp "GitHub Personal Access Token (mit read:packages-Berechtigung): " github_token
-        echo ""
-        
-        if [ -z "$github_username" ] || [ -z "$github_token" ]; then
-            log_warning "Benutzername oder Token fehlt. Die Anmeldung wird übersprungen."
-        else
-            echo "$github_token" | docker login ghcr.io -u "$github_username" --password-stdin
-            if [ $? -eq 0 ]; then
-                log_success "GitHub Container Registry Anmeldung erfolgreich."
-                GITHUB_AUTH_CONFIGURED=true
-            else
-                log_error "GitHub Container Registry Anmeldung fehlgeschlagen."
-                log_warning "Die Installation wird fortgesetzt, aber Sie müssen möglicherweise manuell Anmeldedaten konfigurieren."
-                GITHUB_AUTH_CONFIGURED=false
-            fi
-        fi
-    else
-        log_info "GitHub Anmeldung übersprungen. Wenn die Images privat sind, müssen Sie sich manuell anmelden."
-        GITHUB_AUTH_CONFIGURED=false
-    fi
-}
-
 # Firewall-Konfiguration
 configure_firewall() {
     log_info "Firewall wird konfiguriert..."
@@ -147,24 +186,24 @@ configure_firewall() {
     case $OS in
         ubuntu|debian)
             if command -v ufw &> /dev/null; then
-                ufw allow 80/tcp
-                ufw allow 443/tcp
+                ufw allow $HTTP_PORT/tcp
+                ufw allow $HTTPS_PORT/tcp
                 if ! ufw status | grep -q "Status: active"; then
                     log_warning "UFW ist nicht aktiv. Sie können es mit 'ufw enable' aktivieren."
                 fi
                 log_success "Firewall-Regeln wurden konfiguriert."
             else
-                log_warning "UFW ist nicht installiert. Ports 80 und 443 müssen manuell geöffnet werden."
+                log_warning "UFW ist nicht installiert. Ports $HTTP_PORT und $HTTPS_PORT müssen manuell geöffnet werden."
             fi
             ;;
         centos|rhel|fedora)
             if command -v firewall-cmd &> /dev/null; then
-                firewall-cmd --permanent --add-service=http
-                firewall-cmd --permanent --add-service=https
+                firewall-cmd --permanent --add-port=$HTTP_PORT/tcp
+                firewall-cmd --permanent --add-port=$HTTPS_PORT/tcp
                 firewall-cmd --reload
                 log_success "Firewall-Regeln wurden konfiguriert."
             else
-                log_warning "firewalld ist nicht installiert. Ports 80 und 443 müssen manuell geöffnet werden."
+                log_warning "firewalld ist nicht installiert. Ports $HTTP_PORT und $HTTPS_PORT müssen manuell geöffnet werden."
             fi
             ;;
     esac
@@ -172,15 +211,36 @@ configure_firewall() {
 
 # Kormit-Installation
 install_kormit() {
-    log_info "Kormit wird installiert..."
+    log_section "Kormit wird installiert"
     
-    # Installationsverzeichnis erfragen
-    read -p "Installationsverzeichnis [/opt/kormit]: " INSTALL_DIR
-    INSTALL_DIR=${INSTALL_DIR:-/opt/kormit}
+    # Interaktive Konfiguration, falls nicht über Parameter übergeben und nicht --yes gesetzt
+    if [ "$INSTALL_DIR" = "/opt/kormit" ] && [ "$SKIP_CONFIRM" = false ]; then
+        read -p "Installationsverzeichnis [/opt/kormit]: " user_install_dir
+        if [ -n "$user_install_dir" ]; then
+            INSTALL_DIR="$user_install_dir"
+        fi
+    fi
     
-    # Domain erfragen
-    read -p "Domain-Name (oder IP-Adresse) [localhost]: " DOMAIN_NAME
-    DOMAIN_NAME=${DOMAIN_NAME:-localhost}
+    if [ "$DOMAIN_NAME" = "localhost" ] && [ "$SKIP_CONFIRM" = false ]; then
+        read -p "Domain-Name (oder IP-Adresse) [localhost]: " user_domain
+        if [ -n "$user_domain" ]; then
+            DOMAIN_NAME="$user_domain"
+        fi
+    fi
+    
+    if [ "$HTTP_PORT" = "80" ] && [ "$SKIP_CONFIRM" = false ]; then
+        read -p "HTTP-Port [80]: " user_http_port
+        if [ -n "$user_http_port" ]; then
+            HTTP_PORT="$user_http_port"
+        fi
+    fi
+    
+    if [ "$HTTPS_PORT" = "443" ] && [ "$SKIP_CONFIRM" = false ]; then
+        read -p "HTTPS-Port [443]: " user_https_port
+        if [ -n "$user_https_port" ]; then
+            HTTPS_PORT="$user_https_port"
+        fi
+    fi
     
     # Installationsverzeichnis erstellen
     mkdir -p $INSTALL_DIR
@@ -221,10 +281,12 @@ DOMAIN_NAME=$DOMAIN_NAME
 TIMEZONE=$TIMEZONE
 VOLUME_PREFIX=kormit
 NETWORK_NAME=kormit-network
+HTTP_PORT=$HTTP_PORT
+HTTPS_PORT=$HTTPS_PORT
 
 # Image-Konfiguration
-BACKEND_IMAGE=ghcr.io/kormit-panel/kormit/kormit-backend:main
-FRONTEND_IMAGE=ghcr.io/kormit-panel/kormit/kormit-frontend:main
+BACKEND_IMAGE=kormit/kormit-backend:latest
+FRONTEND_IMAGE=kormit/kormit-frontend:latest
 EOL
     
     # Self-signed Zertifikat für die erste Einrichtung erstellen
@@ -272,34 +334,30 @@ EOL
     log_success "Kormit wurde erfolgreich installiert."
     log_info "Sie können Kormit mit dem Befehl '$INSTALL_DIR/start.sh' starten."
     
-    # Automatischen Start anbieten
-    read -p "Möchten Sie Kormit jetzt starten? (j/N): " start_now
-    if [[ "$start_now" =~ ^[jJ]$ ]]; then
+    # Automatischen Start ausführen, falls konfiguriert
+    if [ "$AUTO_START" = true ]; then
         log_info "Kormit wird gestartet..."
         $INSTALL_DIR/start.sh
-    fi
-}
-
-# Image-Test
-test_images() {
-    log_info "Teste den Zugriff auf die Docker-Images..."
-    
-    if docker pull ghcr.io/kormit-panel/kormit/kormit-backend:main >/dev/null 2>&1; then
-        log_success "Backend-Image ist verfügbar."
     else
-        log_warning "Backend-Image konnte nicht abgerufen werden. Überprüfen Sie Ihre Anmeldedaten."
-    fi
-    
-    if docker pull ghcr.io/kormit-panel/kormit/kormit-frontend:main >/dev/null 2>&1; then
-        log_success "Frontend-Image ist verfügbar."
-    else
-        log_warning "Frontend-Image konnte nicht abgerufen werden. Überprüfen Sie Ihre Anmeldedaten."
+        # Automatischen Start anbieten, wenn nicht bereits per Parameter festgelegt und nicht --yes gesetzt
+        if [ "$SKIP_CONFIRM" = false ]; then
+            read -p "Möchten Sie Kormit jetzt starten? (j/N): " start_now
+            if [[ "$start_now" =~ ^[jJ]$ ]]; then
+                log_info "Kormit wird gestartet..."
+                $INSTALL_DIR/start.sh
+            fi
+        fi
     fi
 }
 
 # Hauptfunktion
 main() {
-    log_info "Kormit-Installation wird gestartet..."
+    clear
+    echo -e "${CYAN}"
+    echo "╔═══════════════════════════════════════════════════════════╗"
+    echo "║                 KORMIT INSTALLER v${VERSION}                  ║"
+    echo "╚═══════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
     
     # Skriptverzeichnis speichern
     SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
@@ -308,19 +366,12 @@ main() {
     check_root
     
     # Betriebssystem erkennen
+    log_section "System-Vorbereitung"
     detect_os
     
     # Notwendige Software installieren
     install_docker
     install_docker_compose
-    
-    # GitHub Container Registry-Authentifizierung konfigurieren
-    configure_ghcr_auth
-    
-    # Test der Images, wenn Authentifizierung konfiguriert wurde
-    if [ "$GITHUB_AUTH_CONFIGURED" = true ]; then
-        test_images
-    fi
     
     # Firewall konfigurieren
     configure_firewall
@@ -328,7 +379,8 @@ main() {
     # Kormit installieren
     install_kormit
     
-    log_success "Die Installation ist abgeschlossen!"
+    log_section "Installation abgeschlossen"
+    log_success "Kormit wurde erfolgreich installiert!"
     log_info "Führen Sie '$INSTALL_DIR/start.sh' aus, um Kormit zu starten."
     log_info "Anschließend können Sie Kormit unter https://$DOMAIN_NAME aufrufen."
     log_warning "Ersetzen Sie das selbstsignierte SSL-Zertifikat für Produktionsumgebungen durch ein gültiges Zertifikat."
