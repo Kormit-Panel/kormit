@@ -18,7 +18,7 @@ echo Running tests...
 cd backend 
 go test .\... 
 cd ..\frontend 
-call npm test 
+call npm test -- --passWithNoTests 
 cd .. 
 goto end 
  

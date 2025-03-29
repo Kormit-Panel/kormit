@@ -5,9 +5,14 @@ module.exports = {
     '**/__tests__/*.[jt]s?(x)'
   ],
   transform: {
-    '^.+\\.vue$': 'vue-jest'
+    '^.+\\.vue$': '@vue/vue3-jest',
+    '^.+\\.jsx?$': 'babel-jest',
+    '^.+\\.tsx?$': 'ts-jest'
   },
   testEnvironment: 'jsdom',
+  testEnvironmentOptions: {
+    customExportConditions: ['node', 'node-addons'],
+  },
   // Wichtig: Mit --passWithNoTests werden die Tests auch bestanden, wenn keine vorhanden sind
   passWithNoTests: true
 } 
