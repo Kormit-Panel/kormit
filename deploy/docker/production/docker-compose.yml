@@ -1,5 +1,8 @@
 version: '3.8'
 
+# Produktions-Docker-Compose für Kormit
+# Diese Konfiguration ist für den Einsatz auf einem Server optimiert
+
 services:
   kormit-db:
     image: postgres:13-alpine
@@ -8,26 +11,31 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=pass
-      - POSTGRES_DB=kormit
+      - POSTGRES_USER=${DB_USER:-user}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-pass}
+      - POSTGRES_DB=${DB_NAME:-kormit}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d kormit"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-user} -d ${DB_NAME:-kormit}"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
       - kormit-network
+    # Datenbank ist nur intern erreichbar
+    expose:
+      - "5432"
 
   kormit-backend:
     image: ${BACKEND_IMAGE:-ghcr.io/kormit-panel/kormit/kormit-backend:latest}
     container_name: kormit-backend
     restart: unless-stopped
     depends_on:
-      - kormit-db
+      kormit-db:
+        condition: service_healthy
     environment:
-      - KORMIT_DB_CONNECTION=postgres://user:pass@kormit-db:5432/kormit
-      - KORMIT_SECRET_KEY=production-secret-key-replace-this
+      - KORMIT_DB_CONNECTION=postgres://${DB_USER:-user}:${DB_PASSWORD:-pass}@kormit-db:5432/${DB_NAME:-kormit}
+      - KORMIT_SECRET_KEY=${SECRET_KEY:-production-secret-key-replace-this}
+      - TZ=${TIMEZONE:-UTC}
     networks:
       - kormit-network
     volumes:
@@ -38,6 +46,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+    # Backend ist nur intern erreichbar
+    expose:
+      - "8080"
 
   kormit-frontend:
     image: ${FRONTEND_IMAGE:-ghcr.io/kormit-panel/kormit/kormit-frontend:latest}
@@ -45,29 +56,46 @@ services:
     restart: unless-stopped
     depends_on:
       - kormit-backend
+    environment:
+      - NODE_ENV=production
+      - VITE_API_URL=/api
     networks:
       - kormit-network
+    # Frontend ist nur intern erreichbar
+    expose:
+      - "80"
 
   kormit-proxy:
     image: nginx:alpine
     container_name: kormit-proxy
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf
       - ./ssl:/etc/nginx/ssl:ro
+      - ./logs:/var/log/nginx
     depends_on:
       - kormit-backend
       - kormit-frontend
     networks:
       - kormit-network
+    environment:
+      - DOMAIN_NAME=${DOMAIN_NAME:-localhost}
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   postgres_data:
+    name: ${VOLUME_PREFIX:-kormit}_postgres_data
   backend_config:
+    name: ${VOLUME_PREFIX:-kormit}_backend_config
 
 networks:
   kormit-network:
     driver: bridge
+    name: ${NETWORK_NAME:-kormit-network}
