@@ -2,7 +2,6 @@ package docker
  
 import ( 
 	"context" 
-	"fmt" 
 ) 
  
 // Client represents a Docker client 
