@@ -8,6 +8,49 @@ Deployment configurations for Kormit.
 - `kubernetes/` - Kubernetes configurations 
 - `scripts/` - Deployment scripts 
 
+# Kormit Deployment-Dokumentation
+
+## Schnellinstallation
+
+### Linux/MacOS
+
+Mit diesem Befehl können Sie Kormit direkt von unserem Repository installieren:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/kormit-panel/kormit/main/deploy/scripts/install_curl.sh | bash
+```
+
+Für benutzerdefinierte Optionen:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/kormit-panel/kormit/main/deploy/scripts/install_curl.sh | bash -s -- --domain=example.com --install-dir=/opt/kormit --auto-start
+```
+
+### Windows (PowerShell)
+
+Öffnen Sie PowerShell als Administrator und führen Sie diesen Befehl aus:
+
+```powershell
+Invoke-Expression (New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/kormit-panel/kormit/main/deploy/scripts/install_curl.ps1')
+```
+
+Für benutzerdefinierte Optionen:
+
+```powershell
+$script = (New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/kormit-panel/kormit/main/deploy/scripts/install_curl.ps1'); 
+Invoke-Expression "$script -DomainName example.com -InstallDir C:\kormit -AutoStart"
+```
+
+## Universeller Installationsbefehl
+
+Mit diesem Befehl erkennt das System automatisch Ihr Betriebssystem und wählt den passenden Installer:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/kormit-panel/kormit/main/deploy/scripts/install.sh | bash
+```
+
+Dieser Befehl funktioniert auf Linux und macOS direkt. Unter Windows wird die empfohlene PowerShell-Syntax angezeigt.
+
 # Kormit Installationsanleitung
 
 Dieses Verzeichnis enthält Skripte und Konfigurationen zur Installation von Kormit auf verschiedenen Plattformen.
@@ -245,3 +288,25 @@ docker compose -f C:\kormit\docker\production\docker-compose.yml logs
 ```
 
 Weitere Informationen finden Sie in der [Fehlerbehebung](docker/production/README.md#fehlerbehebung) der Produktionsdokumentation.
+
+## Schnellstart und Verwaltung
+
+Sobald Kormit installiert ist, können Sie das Schnellstart-Skript verwenden, um es einfach zu verwalten:
+
+### Linux/MacOS
+
+```bash
+curl -sSL https://raw.githubusercontent.com/kormit-panel/kormit/main/deploy/scripts/quick_start.sh | bash
+```
+
+### Windows (PowerShell)
+
+```powershell
+Invoke-Expression (New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/kormit-panel/kormit/main/deploy/scripts/quick_start.ps1')
+```
+
+Das Schnellstart-Skript bietet ein einfaches Menü zur Verwaltung Ihrer Kormit-Installation:
+- Starten
+- Stoppen
+- Aktualisieren
+- Status anzeigen

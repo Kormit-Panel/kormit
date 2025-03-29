@@ -534,3 +534,9 @@ main() {
 
 # Skript ausführen
 main
+
+# Dieser Code wird ausgeführt, wenn das Skript direkt aufgerufen wird
+# Wenn das Skript mit curl ausgeführt wird, wird diese Zeile nicht ausgeführt werden
+
+# Damit das Skript per curl ausführbar ist, füge diese Zeilen am Ende der Datei hinzu
+# curl -sSL https://domain.com/install.sh | bash
