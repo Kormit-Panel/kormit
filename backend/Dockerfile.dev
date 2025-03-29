@@ -1,0 +1,27 @@
+FROM golang:1.18-alpine 
+WORKDIR /app 
+ 
+# Abhängigkeiten für Build & Debugging
+RUN apk add --no-cache git
+
+# Kopieren der Go Module Dateien
+COPY go.mod ./
+# Wenn go.sum existiert, kopieren; wenn nicht, werden wir es generieren
+RUN if [ -f go.sum ]; then cp go.sum ./; fi
+
+# Download notwendiger Module und Generieren von go.sum falls nicht vorhanden
+RUN go mod download && go mod tidy
+
+# Kopieren des restlichen Quellcodes
+COPY . .
+
+# Stelle sicher, dass der Bin-Ordner existiert
+RUN mkdir -p bin
+ 
+# Initial build
+RUN go build -o bin/kormit cmd/kormit/main.go 
+ 
+EXPOSE 8080 
+
+# Starte die Anwendung direkt mit go run für Entwicklung
+CMD ["sh", "-c", "go run cmd/kormit/main.go"] 

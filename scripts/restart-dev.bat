@@ -1,0 +1,9 @@
+@echo off
+echo Stopping and removing existing containers...
+docker-compose -f deploy\docker\development\docker-compose.yml down
+
+echo Cleaning up Docker cache...
+docker system prune -f
+
+echo Rebuilding and starting development environment...
+docker-compose -f deploy\docker\development\docker-compose.yml up --build 

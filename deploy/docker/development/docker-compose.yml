@@ -1,0 +1,66 @@
+version: '3' 
+services: 
+  kormit-backend-dev: 
+    build: 
+      context: ../../../backend 
+      dockerfile: Dockerfile.dev
+    container_name: kormit-backend-dev 
+    restart: unless-stopped 
+    ports: 
+      - "8080:8080" 
+    volumes: 
+      - /var/run/docker.sock:/var/run/docker.sock 
+      - ../../../backend:/app
+      # Stelle sicher, dass der bin-Ordner nicht überschrieben wird
+      - /app/bin
+      - /app/tmp
+    environment: 
+      - KORMIT_DB_CONNECTION=postgres://user:pass@kormit-db-dev:5432/kormit 
+      - KORMIT_SECRET_KEY=dev-secret-key 
+      - KORMIT_DEV_MODE=true 
+    depends_on: 
+      - kormit-db-dev 
+    # Verwende go run direkt für die Entwicklung
+    entrypoint: ["/bin/sh", "-c", "if [ ! -f /app/go.mod ]; then echo 'Error: go.mod not found'; exit 1; fi && go run cmd/kormit/main.go"]
+ 
+  kormit-frontend-dev: 
+    build: 
+      context: ../../../frontend 
+      dockerfile: Dockerfile.dev 
+    container_name: kormit-frontend-dev 
+    restart: unless-stopped 
+    ports: 
+      - "8081:8080" 
+    volumes: 
+      - ../../../frontend:/app
+      # Stelle sicher, dass node_modules nicht überschrieben werden
+      - /app/node_modules
+    depends_on: 
+      - kormit-backend-dev 
+    environment:
+      - NODE_ENV=development
+      - VUE_APP_API_URL=http://localhost:8080
+    # Verbesserte Fehlerbehandlung
+    entrypoint: ["/bin/sh", "-c", "if [ ! -f /app/package.json ]; then echo 'Error: package.json not found'; exit 1; fi && npm run serve || vue-cli-service serve"]
+ 
+  kormit-db-dev: 
+    image: postgres:13 
+    container_name: kormit-db-dev 
+    restart: unless-stopped 
+    ports: 
+      - "5432:5432" 
+    volumes: 
+      - kormit_db_dev:/var/lib/postgresql/data 
+    environment: 
+      - POSTGRES_USER=user 
+      - POSTGRES_PASSWORD=pass 
+      - POSTGRES_DB=kormit 
+    # Verbesserte Fehlerbehandlung
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d kormit"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+ 
+volumes: 
+  kormit_db_dev: 

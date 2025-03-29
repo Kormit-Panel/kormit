@@ -1,0 +1,35 @@
+# Go 
+/backend/bin/ 
+*.exe 
+*.exe~ 
+*.dll 
+*.so 
+*.dylib 
+*.test 
+*.out 
+ 
+# Vue 
+/frontend/node_modules 
+/frontend/dist 
+/frontend/.env.local 
+/frontend/.env.*.local 
+/frontend/npm-debug.log* 
+/frontend/yarn-debug.log* 
+/frontend/yarn-error.log* 
+ 
+# Editor directories and files 
+.idea 
+.vscode 
+*.suo 
+*.ntvs* 
+*.njsproj 
+*.sln 
+*.sw? 
+ 
+# Environment files 
+.env 
+.env.* 
+ 
+# OS-specific 
+.DS_Store 
+Thumbs.db 

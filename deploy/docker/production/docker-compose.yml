@@ -1,0 +1,41 @@
+version: '3' 
+services: 
+  kormit-backend: 
+    image: kormit-backend:latest 
+    container_name: kormit-backend 
+    restart: unless-stopped 
+    ports: 
+      - "8080:8080" 
+    volumes: 
+      - /var/run/docker.sock:/var/run/docker.sock 
+      - kormit_data:/data 
+    environment: 
+      - KORMIT_DB_CONNECTION=postgres://user:pass@kormit-db:5432/kormit 
+      - KORMIT_SECRET_KEY=${KORMIT_SECRET_KEY} 
+    depends_on: 
+      - kormit-db 
+ 
+  kormit-frontend: 
+    image: kormit-frontend:latest 
+    container_name: kormit-frontend 
+    restart: unless-stopped 
+    ports: 
+      - "80:80" 
+      - "443:443" 
+    depends_on: 
+      - kormit-backend 
+ 
+  kormit-db: 
+    image: postgres:13 
+    container_name: kormit-db 
+    restart: unless-stopped 
+    volumes: 
+      - kormit_db:/var/lib/postgresql/data 
+    environment: 
+      - POSTGRES_USER=user 
+      - POSTGRES_PASSWORD=pass 
+      - POSTGRES_DB=kormit 
+ 
+volumes: 
+  kormit_data: 
+  kormit_db: 
