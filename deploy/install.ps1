@@ -11,6 +11,7 @@ param (
     [string]$HttpsPort = "443",
     [switch]$AutoStart,
     [switch]$Yes,
+    [switch]$Debug,
     [switch]$Help
 )
 
@@ -26,6 +27,7 @@ if ($Help) {
     Write-Host "  -HttpsPort PORT           HTTPS-Port (Standard: 443)"
     Write-Host "  -AutoStart                Kormit nach der Installation automatisch starten"
     Write-Host "  -Yes                      Alle Fragen automatisch mit Ja beantworten"
+    Write-Host "  -Debug                    Aktiviere Debug-Ausgaben"
     Write-Host "  -Help                     Diese Hilfe anzeigen"
     Write-Host ""
     Write-Host "Beispiel:"
@@ -78,6 +80,16 @@ function Write-Section {
     Write-Host ""
     Write-Host "▶️  $Title" -ForegroundColor Magenta
     Write-Host ("   " + ("-" * 50)) -ForegroundColor Magenta
+}
+
+function Write-Debug {
+    param (
+        [string]$Message
+    )
+    
+    if ($Debug) {
+        Write-Host "🔍 [DEBUG] $Message" -ForegroundColor DarkGray
+    }
 }
 
 # Prüfe Administrator-Rechte
@@ -151,6 +163,7 @@ function New-DockerComposeFile {
         [string]$Content
     )
     Write-Info "Erstelle docker-compose.yml"
+    Write-Debug "Speichere docker-compose.yml in $Path\docker\production\docker-compose.yml"
     Set-Content -Path "$Path\docker\production\docker-compose.yml" -Value $Content -Encoding UTF8
     Write-Success "docker-compose.yml wurde erstellt."
 }
@@ -162,6 +175,7 @@ function New-NginxConfigFile {
         [string]$Content
     )
     Write-Info "Erstelle nginx.conf"
+    Write-Debug "Speichere nginx.conf in $Path\docker\production\nginx.conf"
     Set-Content -Path "$Path\docker\production\nginx.conf" -Value $Content -Encoding UTF8
     Write-Success "nginx.conf wurde erstellt."
 }
@@ -181,6 +195,8 @@ function New-EnvironmentFile {
     $dbPassword = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 16 | % {[char]$_})
     $secretKey = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 32 | % {[char]$_})
     
+    Write-Debug "Domain: $DomainName, Timezone: $TimeZone, HTTP-Port: $HttpPort, HTTPS-Port: $HttpsPort"
+    
     $envContent = @"
 # Kormit-Konfiguration
 DB_USER=kormit_user
@@ -199,6 +215,7 @@ BACKEND_IMAGE=ghcr.io/kormit-panel/kormit/kormit-backend:latest
 FRONTEND_IMAGE=ghcr.io/kormit-panel/kormit/kormit-frontend:latest
 "@
     
+    Write-Debug "Speichere .env-Datei in $Path\docker\production\.env"
     Set-Content -Path "$Path\docker\production\.env" -Value $envContent -Encoding UTF8
     Write-Success ".env-Datei wurde erstellt."
 }
@@ -213,6 +230,9 @@ function New-SelfSignedCertificate {
     
     $certPath = "$Path\docker\production\ssl"
     $openSSLPath = "$Path\docker\production\ssl\openssl.cnf"
+    
+    Write-Debug "Zertifikatspfad: $certPath"
+    Write-Debug "Domain: $DomainName"
     
     # OpenSSL-Konfigurationsdatei erstellen
     $openSSLConfig = @"
@@ -244,6 +264,7 @@ IP.1 = 127.0.0.1
         Write-Info "OpenSSL gefunden: $openSSLVersion"
         
         # SSL-Zertifikat erstellen
+        Write-Debug "Erstelle SSL-Zertifikat mit OpenSSL"
         openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout "$certPath\kormit.key" -out "$certPath\kormit.crt" -config $openSSLPath
         
         Write-Success "Selbstsigniertes SSL-Zertifikat wurde erstellt."
@@ -253,10 +274,12 @@ IP.1 = 127.0.0.1
         
         try {
             # Windows-eigenes Zertifikat erstellen
+            Write-Debug "Erstelle Windows-eigenes Zertifikat"
             $cert = New-SelfSignedCertificate -DnsName $DomainName -CertStoreLocation "Cert:\LocalMachine\My"
             $certPassword = ConvertTo-SecureString -String "kormit" -Force -AsPlainText
             
             # PFX exportieren
+            Write-Debug "Exportiere PFX-Datei"
             Export-PfxCertificate -Cert "Cert:\LocalMachine\My\$($cert.Thumbprint)" -FilePath "$certPath\kormit.pfx" -Password $certPassword
             
             # Extrahieren für Nginx
@@ -264,6 +287,7 @@ IP.1 = 127.0.0.1
             $pfxContent = [System.Convert]::ToBase64String($pfxBytes)
             
             # Platzhalter für Nginx erstellen
+            Write-Debug "Erstelle Platzhalter für Nginx-Zertifikate"
             Set-Content -Path "$certPath\kormit.key" -Value "-----BEGIN PRIVATE KEY-----`n-----END PRIVATE KEY-----" -Encoding UTF8
             Set-Content -Path "$certPath\kormit.crt" -Value "-----BEGIN CERTIFICATE-----`n-----END CERTIFICATE-----" -Encoding UTF8
             
@@ -277,6 +301,7 @@ IP.1 = 127.0.0.1
             Write-Info "Bitte erstellen Sie ein SSL-Zertifikat und legen Sie es unter $certPath\kormit.key und $certPath\kormit.crt ab."
             
             # Leere Zertifikatsdateien erstellen als Platzhalter
+            Write-Debug "Erstelle leere Platzhalter für Zertifikate"
             Set-Content -Path "$certPath\kormit.key" -Value "# Platzhalter für SSL-Schlüssel" -Encoding UTF8
             Set-Content -Path "$certPath\kormit.crt" -Value "# Platzhalter für SSL-Zertifikat" -Encoding UTF8
         }
@@ -302,6 +327,7 @@ docker compose up -d
 Write-Host "Kormit wurde gestartet. Sie können auf das Dashboard unter https://$DomainName zugreifen." -ForegroundColor Green
 "@
     
+    Write-Debug "Speichere start.ps1 in $Path\start.ps1"
     Set-Content -Path "$Path\start.ps1" -Value $startContent -Encoding UTF8
     Write-Success "Start-Skript wurde erstellt."
 }
@@ -321,6 +347,7 @@ docker compose down
 Write-Host "Kormit wurde gestoppt." -ForegroundColor Green
 "@
     
+    Write-Debug "Speichere stop.ps1 in $Path\stop.ps1"
     Set-Content -Path "$Path\stop.ps1" -Value $stopContent -Encoding UTF8
     Write-Success "Stop-Skript wurde erstellt."
 }
@@ -341,6 +368,7 @@ docker compose up -d
 Write-Host "Kormit wurde aktualisiert." -ForegroundColor Green
 "@
     
+    Write-Debug "Speichere update.ps1 in $Path\update.ps1"
     Set-Content -Path "$Path\update.ps1" -Value $updateContent -Encoding UTF8
     Write-Success "Update-Skript wurde erstellt."
 }
@@ -369,6 +397,7 @@ function Install-Kormit {
     
     # Installationsverzeichnis - falls nicht als Parameter übergeben und nicht -Yes
     $currentDir = Split-Path -Parent $PSCommandPath
+    Write-Debug "Skriptverzeichnis: $currentDir"
     
     # Frage nach dem Installationsverzeichnis, falls nicht als Parameter übergeben
     if ($InstallDir -eq "C:\kormit" -and -not $Yes) {
@@ -402,6 +431,11 @@ function Install-Kormit {
         }
     }
     
+    Write-Debug "Installationsverzeichnis: $InstallDir"
+    Write-Debug "Domain-Name: $DomainName"
+    Write-Debug "HTTP-Port: $HttpPort"
+    Write-Debug "HTTPS-Port: $HttpsPort"
+    
     Write-Section "Installation"
     
     # Erstelle Verzeichnisse
@@ -424,6 +458,7 @@ function Install-Kormit {
     
     # Zeitzone ermitteln
     $timezone = [System.TimeZoneInfo]::Local.Id
+    Write-Debug "Lokale Zeitzone: $timezone"
     
     New-EnvironmentFile -Path $InstallDir -DomainName $DomainName -TimeZone $timezone -HttpPort $HttpPort -HttpsPort $HttpsPort
     
