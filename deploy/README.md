@@ -18,7 +18,7 @@ Dieses Verzeichnis enthält Skripte und Konfigurationen zur Installation von Kor
 
 ```bash
 # Als Root-Benutzer ausführen
-curl -fsSL https://raw.githubusercontent.com/yourusername/kormit/main/deploy/install.sh | sudo bash
+curl -fsSL https://github.com/Kormit-Panel/kormit/raw/refs/heads/main/deploy/install.sh | sudo bash
 ```
 
 Nach der Installation:
@@ -41,7 +41,7 @@ Nach der Installation:
 
 ```powershell
 # PowerShell als Administrator ausführen
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/yourusername/kormit/main/deploy/install.ps1" -OutFile "$env:TEMP\install.ps1"
+Invoke-WebRequest -Uri "https://github.com/Kormit-Panel/kormit/raw/refs/heads/main/deploy/install.ps1" -OutFile "$env:TEMP\install.ps1"
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 & "$env:TEMP\install.ps1"
 ```
