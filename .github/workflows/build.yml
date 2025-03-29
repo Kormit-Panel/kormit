@@ -8,6 +8,10 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build:
     name: Build and Push
@@ -31,8 +35,8 @@ jobs:
         uses: docker/setup-buildx-action@v3
         
       - name: Login to GitHub Container Registry
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -112,33 +116,66 @@ jobs:
           images: |
             ghcr.io/${{ github.repository }}/kormit-frontend
             
-      - name: Build and push Backend image
+      - name: Build Backend image
         uses: docker/build-push-action@v5
         with:
           context: ./backend
-          push: ${{ github.event_name != 'pull_request' }}
+          push: false
           tags: ${{ steps.meta-backend.outputs.tags }}
           labels: ${{ steps.meta-backend.outputs.labels }}
+          outputs: type=docker,dest=/tmp/kormit-backend.tar
           cache-from: type=gha
           cache-to: type=gha,mode=max
           
-      - name: Create minimal frontend Dockerfile if needed
-        run: |
-          cd frontend
-          if [ ! -f "Dockerfile.minimal" ] && [ ! -d "node_modules" ]; then
-            echo "FROM nginx:alpine" > Dockerfile.minimal
-            echo "COPY dist /usr/share/nginx/html" >> Dockerfile.minimal
-            echo "EXPOSE 80" >> Dockerfile.minimal
-            echo "CMD [\"nginx\", \"-g\", \"daemon off;\"]" >> Dockerfile.minimal
-          fi
-          
-      - name: Build and push Frontend image
+      - name: Build Frontend image
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
           file: ./frontend/Dockerfile.minimal
-          push: ${{ github.event_name != 'pull_request' }}
+          push: false
           tags: ${{ steps.meta-frontend.outputs.tags }}
           labels: ${{ steps.meta-frontend.outputs.labels }}
+          outputs: type=docker,dest=/tmp/kormit-frontend.tar
           cache-from: type=gha
-          cache-to: type=gha,mode=max 
+          cache-to: type=gha,mode=max
+          
+      - name: Push Images to Registry
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "Versuche, Images in die Registry zu pushen..."
+          
+          # Lade die erstellten Images
+          docker load --input /tmp/kormit-backend.tar
+          docker load --input /tmp/kormit-frontend.tar
+          
+          # Versuche zu pushen, mit Fehlerbehandlung
+          if docker push ${{ steps.meta-backend.outputs.tags }}; then
+            echo "Backend-Image erfolgreich gepusht"
+          else
+            echo "Fehler beim Pushen des Backend-Images. Möglicherweise ein Berechtigungsproblem mit der Registry."
+            echo "Bitte stellen Sie sicher, dass in den Repository-Einstellungen die korrekten Berechtigungen gesetzt sind:"
+            echo "1. Gehen Sie zu Settings -> Packages"
+            echo "2. Fügen Sie den GitHub Actions-Workflow hinzu und geben Sie Schreibrechte"
+          fi
+          
+          if docker push ${{ steps.meta-frontend.outputs.tags }}; then
+            echo "Frontend-Image erfolgreich gepusht"
+          else
+            echo "Fehler beim Pushen des Frontend-Images."
+          fi
+          
+      - name: Save Docker images as artifacts
+        run: |
+          mkdir -p docker-images
+          cp /tmp/kormit-backend.tar docker-images/
+          cp /tmp/kormit-frontend.tar docker-images/
+          echo "Docker-Images wurden als Artefakte gespeichert und können manuell geladen werden mit:"
+          echo "docker load --input kormit-backend.tar"
+          echo "docker load --input kormit-frontend.tar"
+          
+      - name: Upload Docker images as artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: docker-images
+          path: docker-images/
+          retention-days: 1 
