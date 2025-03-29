@@ -442,7 +442,7 @@ EOL
         -keyout docker/production/ssl/kormit.key \
         -out docker/production/ssl/kormit.crt \
         -subj "/C=DE/ST=State/L=City/O=Organization/CN=$DOMAIN_NAME" \
-        -addext "subjectAltName=DNS:$DOMAIN_NAME,IP:127.0.0.1"
+        -addext "subjectAltName = DNS:$DOMAIN_NAME, IP:127.0.0.1"
     
     chmod 600 docker/production/ssl/kormit.key
     
