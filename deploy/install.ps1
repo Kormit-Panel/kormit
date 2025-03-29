@@ -2,7 +2,7 @@
 # Dieses Skript installiert Kormit auf einem Windows-Server mit Docker Desktop
 
 # Version
-$Version = "1.0.0"
+$Version = "1.1.1"
 
 param (
     [string]$InstallDir = "C:\kormit",
@@ -264,23 +264,43 @@ IP.1 = 127.0.0.1
         $openSSLVersion = openssl version
         Write-Info "OpenSSL gefunden: $openSSLVersion"
         
-        # SSL-Zertifikat erstellen
-        Write-Debug "Erstelle SSL-Zertifikat mit OpenSSL"
-        openssl req -x509 -nodes -days 365 -newkey rsa:2048 `
-            -keyout "$certPath\kormit.key" `
-            -out "$certPath\kormit.crt" `
-            -config $openSSLPath `
-            -sha256
-        
-        Write-Success "Selbstsigniertes SSL-Zertifikat wurde erstellt."
+        # Zuerst mit Konfigurationsdatei versuchen
+        try {
+            Write-Debug "Erstelle SSL-Zertifikat mit OpenSSL Konfigurationsdatei"
+            $opensslProcess = Start-Process -FilePath "openssl" -ArgumentList "req -x509 -nodes -days 365 -newkey rsa:2048 -keyout `"$certPath\kormit.key`" -out `"$certPath\kormit.crt`" -config `"$openSSLPath`" -sha256" -NoNewWindow -PassThru -Wait
+            
+            if ($opensslProcess.ExitCode -eq 0) {
+                Write-Success "Selbstsigniertes SSL-Zertifikat wurde erfolgreich erstellt."
+            } else {
+                throw "OpenSSL-Fehler: Konfigurationsdatei-Methode fehlgeschlagen"
+            }
+        } catch {
+            Write-Warning "Fehler bei der Erstellung des Zertifikats mit Konfigurationsdatei: $_"
+            Write-Info "Versuche alternative Methode ohne Extensions..."
+            
+            try {
+                $opensslProcess = Start-Process -FilePath "openssl" -ArgumentList "req -x509 -nodes -days 365 -newkey rsa:2048 -keyout `"$certPath\kormit.key`" -out `"$certPath\kormit.crt`" -subj `"/C=DE/ST=State/L=City/O=Organization/CN=$DomainName`"" -NoNewWindow -PassThru -Wait
+                
+                if ($opensslProcess.ExitCode -eq 0) {
+                    Write-Warning "SSL-Zertifikat ohne Subject Alternative Names erstellt."
+                    Write-Info "Das Zertifikat funktioniert möglicherweise nicht in allen Browsern korrekt."
+                } else {
+                    throw "OpenSSL-Fehler: Alternative Methode fehlgeschlagen"
+                }
+            } catch {
+                Write-Warning "Alle OpenSSL-Methoden fehlgeschlagen: $_"
+                Write-Info "Wechsle zu Windows-eigener Zertifikatserstellung..."
+                throw
+            }
+        }
     }
     catch {
-        Write-Warning "OpenSSL ist nicht verfügbar. Es wird versucht, ein Windows-eigenes Zertifikat zu erstellen."
+        Write-Warning "OpenSSL ist nicht verfügbar oder fehlgeschlagen. Es wird versucht, ein Windows-eigenes Zertifikat zu erstellen."
         
         try {
             # Windows-eigenes Zertifikat erstellen
             Write-Debug "Erstelle Windows-eigenes Zertifikat"
-            $cert = New-SelfSignedCertificate -DnsName $DomainName -CertStoreLocation "Cert:\LocalMachine\My"
+            $cert = New-SelfSignedCertificate -DnsName $DomainName,"localhost" -CertStoreLocation "Cert:\LocalMachine\My"
             $certPassword = ConvertTo-SecureString -String "kormit" -Force -AsPlainText
             
             # PFX exportieren
@@ -288,18 +308,20 @@ IP.1 = 127.0.0.1
             Export-PfxCertificate -Cert "Cert:\LocalMachine\My\$($cert.Thumbprint)" -FilePath "$certPath\kormit.pfx" -Password $certPassword
             
             # Extrahieren für Nginx
-            $pfxBytes = Get-Content "$certPath\kormit.pfx" -Encoding Byte
-            $pfxContent = [System.Convert]::ToBase64String($pfxBytes)
+            Write-Debug "Exportiere Zertifikat und Schlüssel für Nginx"
+            # Extrahiere das Zertifikat
+            $exportProcess = Start-Process -FilePath "openssl" -ArgumentList "pkcs12 -in `"$certPath\kormit.pfx`" -clcerts -nokeys -out `"$certPath\kormit.crt`" -passin pass:kormit" -NoNewWindow -PassThru -Wait -ErrorAction SilentlyContinue
             
-            # Platzhalter für Nginx erstellen
-            Write-Debug "Erstelle Platzhalter für Nginx-Zertifikate"
-            Set-Content -Path "$certPath\kormit.key" -Value "-----BEGIN PRIVATE KEY-----`n-----END PRIVATE KEY-----" -Encoding UTF8
-            Set-Content -Path "$certPath\kormit.crt" -Value "-----BEGIN CERTIFICATE-----`n-----END CERTIFICATE-----" -Encoding UTF8
+            # Extrahiere den privaten Schlüssel
+            $exportKeyProcess = Start-Process -FilePath "openssl" -ArgumentList "pkcs12 -in `"$certPath\kormit.pfx`" -nocerts -out `"$certPath\kormit_enc.key`" -passin pass:kormit -passout pass:kormit" -NoNewWindow -PassThru -Wait -ErrorAction SilentlyContinue
             
-            Write-Info "Sie müssen das generierte PFX-Zertifikat in die richtigen Formate für Nginx konvertieren."
-            Write-Info "PFX-Passwort: kormit"
+            # Entschlüssle den privaten Schlüssel
+            $decryptKeyProcess = Start-Process -FilePath "openssl" -ArgumentList "rsa -in `"$certPath\kormit_enc.key`" -out `"$certPath\kormit.key`" -passin pass:kormit" -NoNewWindow -PassThru -Wait -ErrorAction SilentlyContinue
             
-            Write-Success "Windows-Zertifikat wurde erstellt, muss aber manuell konvertiert werden."
+            # Temporäre Datei entfernen
+            Remove-Item -Path "$certPath\kormit_enc.key" -Force -ErrorAction SilentlyContinue
+            
+            Write-Success "Windows-Zertifikat wurde erstellt und für Nginx konvertiert."
         }
         catch {
             Write-Warning "Weder OpenSSL noch Windows-Zertifikatserstellung funktionierte. SSL-Zertifikate müssen manuell erstellt werden."

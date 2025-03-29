@@ -311,6 +311,13 @@ Das Schnellstart-Skript bietet ein einfaches Menü zur Verwaltung Ihrer Kormit-I
 - Aktualisieren
 - Status anzeigen
 
+## Änderungen in Version 1.1.1
+
+- **Verbesserte SSL-Zertifikatserstellung**: Robustere Methode zur Erstellung von SSL-Zertifikaten, die mit allen OpenSSL-Versionen kompatibel ist.
+- **Bessere Fehlerbehandlung**: Mehrere Fallback-Methoden für den Fall, dass die primäre Zertifikatserstellung fehlschlägt.
+- **Automatisches Failover**: Bei Fehlern wird automatisch auf einfachere Zertifikatsmethoden zurückgegriffen.
+- **Ubuntu 24.04 Unterstützung**: Behebt Probleme mit neueren Ubuntu-Versionen.
+
 ## Änderungen in Version 1.1.0
 
 - **SSL-Zertifikat-Fix**: Die Erstellung der selbstsignierten SSL-Zertifikate wurde verbessert und ist jetzt kompatibel mit verschiedenen OpenSSL-Versionen.
