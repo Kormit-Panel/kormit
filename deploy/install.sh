@@ -3,7 +3,7 @@
 # Unterstützt: Ubuntu, Debian, CentOS, RHEL
 
 # Version
-VERSION="1.1.6"
+VERSION="1.1.7"
 
 # Parameter verarbeiten
 INSTALL_DIR="/opt/kormit"
@@ -295,6 +295,8 @@ configure_firewall() {
 
 # Kormit-Installation
 install_kormit() {
+    local install_dir_abs
+
     log_section "Kormit wird installiert"
     
     # Interaktive Konfiguration mit Timeout
@@ -311,6 +313,14 @@ install_kormit() {
             INSTALL_DIR="$user_install_dir"
         fi
     fi
+    
+    # Stelle sicher, dass INSTALL_DIR ein absoluter Pfad ist
+    if [[ "$INSTALL_DIR" != /* ]]; then
+        install_dir_abs="$(pwd)/$INSTALL_DIR"
+    else
+        install_dir_abs="$INSTALL_DIR"
+    fi
+    INSTALL_DIR="$install_dir_abs"
     
     if [ "$DOMAIN_NAME" = "localhost" ] && [ "$SKIP_CONFIRM" = false ]; then
         read_with_timeout "Domain-Name (oder IP-Adresse) [localhost]: " "localhost" "user_domain"
@@ -352,8 +362,8 @@ install_kormit() {
     
     # Installationsverzeichnis erstellen
     log_debug "Erstelle Installationsverzeichnis $INSTALL_DIR"
-    mkdir -p $INSTALL_DIR
-    cd $INSTALL_DIR || {
+    mkdir -p "$INSTALL_DIR"
+    cd "$INSTALL_DIR" || {
         log_error "Konnte nicht in Installationsverzeichnis wechseln: $INSTALL_DIR"
         exit 1
     }
@@ -769,22 +779,20 @@ EOL
     
     log_success "Kormit wurde erfolgreich installiert."
     
-    # Zeige den absoluten Pfad an, nicht die relativen Pfade
-    # FULL_PATH="$INSTALL_DIR"
-    
-    log_info "Führen Sie '$INSTALL_DIR/start.sh' aus, um Kormit zu starten."
+    # Verwende direkt INSTALL_DIR ohne Zwischenvariable
+    log_info "Führen Sie '${INSTALL_DIR}/start.sh' aus, um Kormit zu starten."
     
     # Automatischen Start ausführen, falls konfiguriert
     if [ "$AUTO_START" = true ]; then
         log_info "Kormit wird gestartet..."
-        "$INSTALL_DIR/start.sh"
+        "${INSTALL_DIR}/start.sh"
     else
         # Automatischen Start anbieten, wenn nicht bereits per Parameter festgelegt und nicht --yes gesetzt
         if [ "$SKIP_CONFIRM" = false ]; then
             read_with_timeout "Möchten Sie Kormit jetzt starten? (j/N): " "N" "start_now"
             if [[ "$start_now" =~ ^[jJ]$ ]]; then
                 log_info "Kormit wird gestartet..."
-                "$INSTALL_DIR/start.sh"
+                "${INSTALL_DIR}/start.sh"
             fi
         fi
     fi
@@ -827,16 +835,16 @@ main() {
     log_section "Installation abgeschlossen"
     log_success "Kormit wurde erfolgreich installiert!"
     
-    # Zeige den absoluten Pfad an, nicht die relativen Pfade
-    # FULL_PATH="$INSTALL_DIR"
-    
-    log_info "Führen Sie '$INSTALL_DIR/start.sh' aus, um Kormit zu starten."
+    # Verwende direkt INSTALL_DIR ohne Zwischenvariable
+    log_info "Führen Sie '${INSTALL_DIR}/start.sh' aus, um Kormit zu starten."
     if [ "$USE_HTTPS" = true ]; then
         log_info "Anschließend können Sie Kormit unter https://$DOMAIN_NAME aufrufen."
         log_warning "Ersetzen Sie das selbstsignierte SSL-Zertifikat für Produktionsumgebungen durch ein gültiges Zertifikat."
     else
         log_info "Anschließend können Sie Kormit unter http://$DOMAIN_NAME aufrufen."
     fi
+    
+    echo "Installation abgeschlossen!"
 }
 
 # Skript ausführen
