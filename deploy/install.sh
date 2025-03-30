@@ -3,7 +3,7 @@
 # Unterstützt: Ubuntu, Debian, CentOS, RHEL
 
 # Version
-VERSION="1.1.7"
+VERSION="1.1.8"
 
 # Parameter verarbeiten
 INSTALL_DIR="/opt/kormit"
@@ -295,7 +295,8 @@ configure_firewall() {
 
 # Kormit-Installation
 install_kormit() {
-    local install_dir_abs
+    # Der Pfad zur Installation wird in einer lokalen Variable gespeichert
+    local install_dir_absolute
 
     log_section "Kormit wird installiert"
     
@@ -314,13 +315,15 @@ install_kormit() {
         fi
     fi
     
-    # Stelle sicher, dass INSTALL_DIR ein absoluter Pfad ist
+    # Stelle sicher, dass INSTALL_DIR ein absoluter Pfad ist und keine Kommandosubstitution enthält
     if [[ "$INSTALL_DIR" != /* ]]; then
-        install_dir_abs="$(pwd)/$INSTALL_DIR"
+        install_dir_absolute="$(pwd)/$INSTALL_DIR"
     else
-        install_dir_abs="$INSTALL_DIR"
+        install_dir_absolute="$INSTALL_DIR"
     fi
-    INSTALL_DIR="$install_dir_abs"
+    
+    # Entferne mögliche Kommandosubstitution aus dem Pfad
+    INSTALL_DIR=$(echo "$install_dir_absolute" | sed 's/EXIT_CODE=[0-9]*//')
     
     if [ "$DOMAIN_NAME" = "localhost" ] && [ "$SKIP_CONFIRM" = false ]; then
         read_with_timeout "Domain-Name (oder IP-Adresse) [localhost]: " "localhost" "user_domain"
@@ -779,20 +782,23 @@ EOL
     
     log_success "Kormit wurde erfolgreich installiert."
     
-    # Verwende direkt INSTALL_DIR ohne Zwischenvariable
-    log_info "Führen Sie '${INSTALL_DIR}/start.sh' aus, um Kormit zu starten."
+    # Pfad umwandeln in String und eventuellen EXIT_CODE=0 entfernen
+    FINAL_PATH=$(echo "$INSTALL_DIR" | sed 's/EXIT_CODE=[0-9]*//')
+    
+    # Direkte Ausgabe des Pfades ohne Subshell oder andere Konstrukte die Werte einfügen könnten
+    log_info "Führen Sie '$(printf '%s' "$FINAL_PATH")/start.sh' aus, um Kormit zu starten."
     
     # Automatischen Start ausführen, falls konfiguriert
     if [ "$AUTO_START" = true ]; then
         log_info "Kormit wird gestartet..."
-        "${INSTALL_DIR}/start.sh"
+        "$INSTALL_DIR/start.sh"
     else
         # Automatischen Start anbieten, wenn nicht bereits per Parameter festgelegt und nicht --yes gesetzt
         if [ "$SKIP_CONFIRM" = false ]; then
             read_with_timeout "Möchten Sie Kormit jetzt starten? (j/N): " "N" "start_now"
             if [[ "$start_now" =~ ^[jJ]$ ]]; then
                 log_info "Kormit wird gestartet..."
-                "${INSTALL_DIR}/start.sh"
+                "$INSTALL_DIR/start.sh"
             fi
         fi
     fi
@@ -835,8 +841,12 @@ main() {
     log_section "Installation abgeschlossen"
     log_success "Kormit wurde erfolgreich installiert!"
     
-    # Verwende direkt INSTALL_DIR ohne Zwischenvariable
-    log_info "Führen Sie '${INSTALL_DIR}/start.sh' aus, um Kormit zu starten."
+    # Pfad umwandeln in String und eventuellen EXIT_CODE=0 entfernen
+    FINAL_PATH=$(echo "$INSTALL_DIR" | sed 's/EXIT_CODE=[0-9]*//')
+    
+    # Direkte Ausgabe des Pfades ohne Subshell oder andere Konstrukte die Werte einfügen könnten
+    log_info "Führen Sie '$(printf '%s' "$FINAL_PATH")/start.sh' aus, um Kormit zu starten."
+    
     if [ "$USE_HTTPS" = true ]; then
         log_info "Anschließend können Sie Kormit unter https://$DOMAIN_NAME aufrufen."
         log_warning "Ersetzen Sie das selbstsignierte SSL-Zertifikat für Produktionsumgebungen durch ein gültiges Zertifikat."
