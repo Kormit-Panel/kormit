@@ -770,21 +770,21 @@ EOL
     log_success "Kormit wurde erfolgreich installiert."
     
     # Zeige den absoluten Pfad an, nicht die relativen Pfade
-    FULL_PATH="$INSTALL_DIR"
+    # FULL_PATH="$INSTALL_DIR"
     
-    log_info "Führen Sie '$FULL_PATH/start.sh' aus, um Kormit zu starten."
+    log_info "Führen Sie '$INSTALL_DIR/start.sh' aus, um Kormit zu starten."
     
     # Automatischen Start ausführen, falls konfiguriert
     if [ "$AUTO_START" = true ]; then
         log_info "Kormit wird gestartet..."
-        "$FULL_PATH/start.sh"
+        "$INSTALL_DIR/start.sh"
     else
         # Automatischen Start anbieten, wenn nicht bereits per Parameter festgelegt und nicht --yes gesetzt
         if [ "$SKIP_CONFIRM" = false ]; then
             read_with_timeout "Möchten Sie Kormit jetzt starten? (j/N): " "N" "start_now"
             if [[ "$start_now" =~ ^[jJ]$ ]]; then
                 log_info "Kormit wird gestartet..."
-                "$FULL_PATH/start.sh"
+                "$INSTALL_DIR/start.sh"
             fi
         fi
     fi
@@ -828,9 +828,9 @@ main() {
     log_success "Kormit wurde erfolgreich installiert!"
     
     # Zeige den absoluten Pfad an, nicht die relativen Pfade
-    FULL_PATH="$INSTALL_DIR"
+    # FULL_PATH="$INSTALL_DIR"
     
-    log_info "Führen Sie '$FULL_PATH/start.sh' aus, um Kormit zu starten."
+    log_info "Führen Sie '$INSTALL_DIR/start.sh' aus, um Kormit zu starten."
     if [ "$USE_HTTPS" = true ]; then
         log_info "Anschließend können Sie Kormit unter https://$DOMAIN_NAME aufrufen."
         log_warning "Ersetzen Sie das selbstsignierte SSL-Zertifikat für Produktionsumgebungen durch ein gültiges Zertifikat."
