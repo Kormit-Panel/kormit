@@ -1,7 +1,7 @@
 #!/bin/bash
 # Kormit Installer Setup Script
 # This script downloads and runs the Kormit Management Script
-# Version 1.2.0 - Mit interaktivem Menü und Uninstall-Funktionalität
+# Version 1.2.1 - Mit korrigiertem interaktivem Menü
 
 # Farbdefinitionen für bessere Lesbarkeit
 RESET="\033[0m"
@@ -29,7 +29,7 @@ print_logo() {
     echo "║   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝╚═╝   ╚═╝               ║"
     echo "║                                                                ║"
     echo "╠════════════════════════════════════════════════════════════════╣"
-    echo "║                      Setup Script v1.2.0                       ║"
+    echo "║                      Setup Script v1.2.1                       ║"
     echo "╚════════════════════════════════════════════════════════════════╝"
     echo -e "${RESET}"
 }
@@ -281,9 +281,8 @@ uninstall_kormit() {
     return 0
 }
 
-# Interaktives Menü anzeigen
+# Interaktives Menü anzeigen - jetzt mit Ausführungssteuerung
 show_menu() {
-    clear
     print_logo
     echo -e "${BLUE}${BOLD}HAUPTMENÜ${RESET}"
     echo -e "${BLUE}═════════${RESET}"
@@ -301,15 +300,15 @@ show_menu() {
     case $choice in
         1)
             install_kormit "$INSTALL_DIR"
-            press_enter_to_continue
+            return 0
             ;;
         2)
             uninstall_kormit "$INSTALL_DIR" false
-            press_enter_to_continue
+            return 0
             ;;
         3)
             uninstall_kormit "$INSTALL_DIR" true
-            press_enter_to_continue
+            return 0
             ;;
         4)
             echo -e "Aktuelles Installationsverzeichnis: ${BOLD}$INSTALL_DIR${RESET}"
@@ -318,7 +317,7 @@ show_menu() {
                 INSTALL_DIR="$new_dir"
                 echo -e "${GREEN}✅ Installationsverzeichnis geändert auf: ${BOLD}$INSTALL_DIR${RESET}"
             fi
-            press_enter_to_continue
+            # Hier kein return, damit wir wieder ins Menü kommen
             ;;
         0)
             echo -e "${GREEN}Auf Wiedersehen!${RESET}"
@@ -326,14 +325,19 @@ show_menu() {
             ;;
         *)
             echo -e "${RED}Ungültige Option. Bitte wählen Sie eine Zahl zwischen 0 und 4.${RESET}"
-            press_enter_to_continue
+            # Hier kein return, damit wir wieder ins Menü kommen
             ;;
     esac
-}
-
-press_enter_to_continue() {
+    
+    # Nach Option 4 oder bei ungültiger Eingabe fragen wir, ob man zurück zum Menü will
     echo ""
-    read -p "Drücken Sie Enter, um fortzufahren..."
+    read -p "Drücken Sie Enter, um fortzufahren oder 'q' zum Beenden: " continue_opt
+    if [[ "$continue_opt" =~ ^[qQ]$ ]]; then
+        echo -e "${GREEN}Auf Wiedersehen!${RESET}"
+        exit 0
+    fi
+    
+    return 1  # 1 = Menü erneut anzeigen
 }
 
 # Hauptprogramm
@@ -387,9 +391,14 @@ main() {
             exit $?
         fi
     else
-        # Interaktiven Modus starten
+        # Interaktiven Modus starten - nur einmal anzeigen, nicht in Schleife
         while true; do
+            clear  # Bildschirm säubern vor jeder Anzeige
             show_menu
+            # Wenn show_menu 0 zurückgibt, beenden wir die Schleife
+            if [ $? -eq 0 ]; then
+                break
+            fi
         done
     fi
 }
