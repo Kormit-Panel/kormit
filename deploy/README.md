@@ -7,10 +7,9 @@ Diese Anleitung ermöglicht es Ihnen, Kormit mit einem einfachen Befehl zu insta
 Kopieren Sie den folgenden Befehl und führen Sie ihn in Ihrem Terminal aus:
 
 ```bash
-curl -sSL https://beispiel.com/kormit-setup.sh | sudo bash
+curl -sSL https://github.com/Kormit-Panel/kormit/raw/refs/heads/main/deploy/kormit-setup.sh | sudo bash
 ```
 
-Ersetzen Sie `https://beispiel.com/kormit-setup.sh` mit der tatsächlichen URL, unter der Sie das Setup-Skript gehostet haben.
 
 ## 2. Nach der Installation
 
