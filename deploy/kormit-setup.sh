@@ -40,7 +40,7 @@ fi
 
 # Temporäres Verzeichnis für den Download
 TMP_DIR=$(mktemp -d)
-INSTALL_SCRIPT="$TMP_DIR/install.sh"
+MANAGER_SCRIPT="$TMP_DIR/manager.sh"
 
 echo -e "${CYAN}▶ Überprüfe Voraussetzungen...${RESET}"
 
@@ -73,79 +73,48 @@ if ! command -v curl &> /dev/null; then
     fi
 fi
 
-echo -e "${CYAN}▶ Lade Kormit Installer herunter...${RESET}"
+echo -e "${CYAN}▶ Lade Kormit Manager herunter...${RESET}"
 
-# Installationsskript-URL (beispielhaft)
-INSTALL_URL="https://raw.githubusercontent.com/kormit-panel/kormit/main/deploy/install.sh"
+# Installationsskript-URL
+INSTALL_URL="https://github.com/Kormit-Panel/kormit/raw/refs/heads/main/deploy/manager.sh"
 
-# Herunterladen des Installationsskripts
-if curl -sSL "$INSTALL_URL" -o "$INSTALL_SCRIPT"; then
+# Herunterladen des Manager-Skripts
+if curl -sSL "$INSTALL_URL" -o "$MANAGER_SCRIPT"; then
     echo -e "${GREEN}✅ Download erfolgreich.${RESET}"
 else
-    echo -e "${RED}❌ Fehler beim Herunterladen des Installationsskripts.${RESET}"
+    echo -e "${RED}❌ Fehler beim Herunterladen des Manager-Skripts.${RESET}"
     echo -e "${YELLOW}Bitte überprüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.${RESET}"
     rm -rf "$TMP_DIR"
     exit 1
 fi
 
 # Ausführbar machen
-chmod +x "$INSTALL_SCRIPT"
+chmod +x "$MANAGER_SCRIPT"
 
 echo -e "\n${CYAN}▶ Einrichtungsoptionen${RESET}"
-echo -e "${YELLOW}Möchten Sie das Installationsskript mit benutzerdefinierten Parametern ausführen?${RESET}"
-echo -e "1) Standard-Installation (empfohlen)"
-echo -e "2) Benutzerdefinierte Installation"
+echo -e "${YELLOW}Möchten Sie das Installationsverzeichnis anpassen?${RESET}"
+echo -e "1) Standard-Installation nach /opt/kormit (empfohlen)"
+echo -e "2) Benutzerdefiniertes Installationsverzeichnis"
 echo -e "3) Abbrechen"
 
 read -p "Option wählen (1-3): " setup_option
 
+# Standardpfad definieren
+DEFAULT_INSTALL_DIR="/opt/kormit"
+REAL_INSTALL_DIR="$DEFAULT_INSTALL_DIR"
+
 case $setup_option in
     1)
-        echo -e "\n${CYAN}▶ Starte Standard-Installation...${RESET}"
-        "$INSTALL_SCRIPT"
+        echo -e "\n${CYAN}▶ Verwende Standardpfad: $DEFAULT_INSTALL_DIR${RESET}"
         ;;
     2)
         echo -e "\n${CYAN}▶ Benutzerdefinierte Installation...${RESET}"
         
         # Installationsverzeichnis
-        DEFAULT_INSTALL_DIR="/opt/kormit"
         read -p "Installationsverzeichnis [$DEFAULT_INSTALL_DIR]: " INSTALL_DIR
-        INSTALL_DIR=${INSTALL_DIR:-$DEFAULT_INSTALL_DIR}
+        REAL_INSTALL_DIR=${INSTALL_DIR:-$DEFAULT_INSTALL_DIR}
         
-        # Domain-Name
-        DEFAULT_DOMAIN="localhost"
-        read -p "Domain-Name oder IP-Adresse [$DEFAULT_DOMAIN]: " DOMAIN_NAME
-        DOMAIN_NAME=${DOMAIN_NAME:-$DEFAULT_DOMAIN}
-        
-        # HTTP-Port
-        DEFAULT_HTTP_PORT="80"
-        read -p "HTTP-Port [$DEFAULT_HTTP_PORT]: " HTTP_PORT
-        HTTP_PORT=${HTTP_PORT:-$DEFAULT_HTTP_PORT}
-        
-        # HTTPS verwenden?
-        read -p "HTTPS verwenden? (J/n): " use_https
-        if [[ "$use_https" =~ ^[nN]$ ]]; then
-            HTTP_ONLY="--http-only"
-        else
-            HTTP_ONLY=""
-            # HTTPS-Port
-            DEFAULT_HTTPS_PORT="443"
-            read -p "HTTPS-Port [$DEFAULT_HTTPS_PORT]: " HTTPS_PORT
-            HTTPS_PORT=${HTTPS_PORT:-$DEFAULT_HTTPS_PORT}
-        fi
-        
-        echo -e "\n${CYAN}▶ Starte benutzerdefinierte Installation...${RESET}"
-        
-        # Argumente für das Installationsskript zusammenstellen
-        INSTALL_ARGS="--install-dir=$INSTALL_DIR --domain=$DOMAIN_NAME --http-port=$HTTP_PORT"
-        
-        if [ -n "$HTTP_ONLY" ]; then
-            INSTALL_ARGS="$INSTALL_ARGS $HTTP_ONLY"
-        else
-            INSTALL_ARGS="$INSTALL_ARGS --https-port=$HTTPS_PORT"
-        fi
-        
-        "$INSTALL_SCRIPT" $INSTALL_ARGS
+        echo -e "Installationsverzeichnis: ${BOLD}$REAL_INSTALL_DIR${RESET}"
         ;;
     3)
         echo -e "\n${YELLOW}Installation abgebrochen.${RESET}"
@@ -153,10 +122,17 @@ case $setup_option in
         exit 0
         ;;
     *)
-        echo -e "\n${RED}Ungültige Option. Installation wird mit Standardoptionen fortgesetzt.${RESET}"
-        "$INSTALL_SCRIPT"
+        echo -e "\n${RED}Ungültige Option. Verwende Standardpfad: $DEFAULT_INSTALL_DIR${RESET}"
         ;;
 esac
+
+# Zielverzeichnis erstellen, falls es nicht existiert
+mkdir -p "$REAL_INSTALL_DIR"
+
+# Manager-Skript in das Zielverzeichnis kopieren
+echo -e "\n${CYAN}▶ Installiere Manager-Skript in $REAL_INSTALL_DIR...${RESET}"
+cp "$MANAGER_SCRIPT" "$REAL_INSTALL_DIR/kormit-manager.sh"
+chmod +x "$REAL_INSTALL_DIR/kormit-manager.sh"
 
 # Aufräumen
 rm -rf "$TMP_DIR"
@@ -164,26 +140,18 @@ rm -rf "$TMP_DIR"
 # Kormit-Befehl erstellen
 echo -e "\n${CYAN}▶ Erstelle 'kormit' Systembefehl...${RESET}"
 
-# Den Pfad zum Installationsverzeichnis verwenden (falls angepasst)
-MANAGE_SCRIPT="${INSTALL_DIR:-/opt/kormit}/manage.sh"
+# Systemweiten Befehl einrichten
+KORMIT_SCRIPT_ORIG="$REAL_INSTALL_DIR/kormit-manager.sh"
+KORMIT_COMMAND="/usr/local/bin/kormit"
 
-# Wrapper-Skript erstellen
-KORMIT_WRAPPER="/usr/local/bin/kormit"
-
-cat > "$KORMIT_WRAPPER" << EOL
-#!/bin/bash
-# Kormit-Befehl Wrapper
-sudo ${MANAGE_SCRIPT} "\$@"
-EOL
-
-# Ausführbar machen
-chmod +x "$KORMIT_WRAPPER"
+# Dann erstellen wir einen symbolischen Link
+ln -sf "$KORMIT_SCRIPT_ORIG" "$KORMIT_COMMAND"
 
 echo -e "${GREEN}✅ Kormit-Befehl erfolgreich eingerichtet.${RESET}"
 
 echo -e "\n${GREEN}${BOLD}Setup abgeschlossen!${RESET}"
 echo -e "Sie können Kormit nun auf zwei Arten verwenden:"
-echo -e "1. Über den globalen Befehl: ${BOLD}kormit${RESET}"
-echo -e "2. Direkt über das Skript: ${BOLD}sudo ${MANAGE_SCRIPT}${RESET}"
-echo -e "\nBitte beachten: Der 'kormit'-Befehl verwendet intern sudo."
+echo -e "1. Über den globalen Befehl: ${BOLD}sudo kormit${RESET}"
+echo -e "2. Direkt über das Skript: ${BOLD}sudo $REAL_INSTALL_DIR/kormit-manager.sh${RESET}"
+echo -e "\nBitte beachten: Beide Befehle benötigen Root-Rechte (sudo)."
 echo -e "\nVielen Dank, dass Sie Kormit verwenden!"
