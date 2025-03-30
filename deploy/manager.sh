@@ -707,8 +707,7 @@ show_menu() {
             ;;
         2)
             update_repository
-            press_enter_to_continue
-            ;;
+            press_enter_to_continue;;
         3)
             install_kormit
             press_enter_to_continue
