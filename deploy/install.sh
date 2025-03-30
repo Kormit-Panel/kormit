@@ -3,7 +3,7 @@
 # Unterstützt: Ubuntu, Debian, CentOS, RHEL
 
 # Version
-VERSION="1.1.5"
+VERSION="1.1.6"
 
 # Parameter verarbeiten
 INSTALL_DIR="/opt/kormit"
@@ -78,6 +78,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Trap für Fehlerbehandlung hinzufügen
+trap 'echo "Installation wurde unterbrochen. Überprüfen Sie die Fehlermeldungen."; exit 1' ERR
+
+# Vorsichtige Fehlerbehandlung
 set -e
 
 # Farbige Ausgaben
@@ -125,6 +129,32 @@ check_root() {
     fi
 }
 
+# Funktion für Eingaben mit Timeout
+read_with_timeout() {
+    local prompt="$1"
+    local default="$2"
+    local var_name="$3"
+    local timeout=30
+    
+    # Wenn SKIP_CONFIRM gesetzt ist, direkt den Standardwert zurückgeben
+    if [ "$SKIP_CONFIRM" = true ]; then
+        eval "$var_name=\"$default\""
+        return
+    fi
+    
+    log_debug "Lese Benutzereingabe mit Timeout $timeout Sekunden"
+    read -t $timeout -p "$prompt" input
+    
+    # Wenn Timeout erreicht oder leere Eingabe, Standardwert verwenden
+    if [ $? -ne 0 ] || [ -z "$input" ]; then
+        log_debug "Timeout oder leere Eingabe, verwende Standardwert: $default"
+        eval "$var_name=\"$default\""
+    else
+        log_debug "Benutzereingabe: $input"
+        eval "$var_name=\"$input\""
+    fi
+}
+
 # Systemtyp erkennen
 detect_os() {
     log_info "Betriebssystem wird erkannt..."
@@ -134,6 +164,7 @@ detect_os() {
         OS=$ID
         VERSION=$VERSION_ID
         log_info "Erkanntes Betriebssystem: $OS $VERSION"
+        log_debug "OS-Details: $(cat /etc/os-release | grep -E '^(NAME|VERSION)=')"
     else
         log_error "Betriebssystem konnte nicht erkannt werden."
         exit 1
@@ -145,12 +176,14 @@ install_docker() {
     log_info "Docker wird installiert/überprüft..."
     
     if command -v docker &> /dev/null; then
-        log_success "Docker ist bereits installiert."
+        DOCKER_VERSION=$(docker --version 2>/dev/null || echo "Unbekannt")
+        log_success "Docker ist bereits installiert: $DOCKER_VERSION"
     else
         log_info "Docker wird installiert..."
         
         case $OS in
             ubuntu|debian)
+                log_debug "Installiere Docker für $OS $VERSION"
                 apt update
                 apt install -y apt-transport-https ca-certificates curl software-properties-common gnupg
                 curl -fsSL https://download.docker.com/linux/$OS/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
@@ -159,6 +192,7 @@ install_docker() {
                 apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
                 ;;
             centos|rhel|fedora)
+                log_debug "Installiere Docker für $OS $VERSION"
                 yum install -y yum-utils
                 yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
                 yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
@@ -171,7 +205,14 @@ install_docker() {
                 ;;
         esac
         
-        log_success "Docker wurde erfolgreich installiert."
+        # Überprüfen, ob Docker nach der Installation verfügbar ist
+        if command -v docker &> /dev/null; then
+            DOCKER_VERSION=$(docker --version 2>/dev/null || echo "Unbekannt")
+            log_success "Docker wurde erfolgreich installiert: $DOCKER_VERSION"
+        else
+            log_error "Docker konnte nicht installiert werden."
+            exit 1
+        fi
     fi
 }
 
@@ -180,20 +221,43 @@ install_docker_compose() {
     log_info "Docker Compose wird installiert/überprüft..."
     
     if docker compose version &> /dev/null; then
-        log_success "Docker Compose Plugin ist bereits installiert."
+        COMPOSE_VERSION=$(docker compose version --short 2>/dev/null || echo "Unbekannt")
+        log_success "Docker Compose Plugin ist bereits installiert: $COMPOSE_VERSION"
     elif command -v docker-compose &> /dev/null; then
-        log_success "Docker Compose Legacy ist bereits installiert."
+        COMPOSE_VERSION=$(docker-compose --version 2>/dev/null || echo "Unbekannt")
+        log_success "Docker Compose Legacy ist bereits installiert: $COMPOSE_VERSION"
     else
         log_info "Docker Compose wird installiert..."
         
-        COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+        log_debug "Lade neueste Docker Compose Version"
+        COMPOSE_LATEST=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+        
+        if [ -z "$COMPOSE_LATEST" ]; then
+            log_warning "Konnte neueste Docker Compose Version nicht ermitteln, verwende 2.26.0"
+            COMPOSE_VERSION="v2.26.0"
+        else
+            COMPOSE_VERSION="$COMPOSE_LATEST"
+            log_debug "Neueste Docker Compose Version: $COMPOSE_VERSION"
+        fi
         
         mkdir -p /usr/local/lib/docker/cli-plugins
-        curl -SL "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/lib/docker/cli-plugins/docker-compose
-        chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
-        ln -sf /usr/local/lib/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
-        
-        log_success "Docker Compose wurde erfolgreich installiert."
+        log_debug "Lade Docker Compose Binary herunter"
+        if curl -SL "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/lib/docker/cli-plugins/docker-compose; then
+            chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+            ln -sf /usr/local/lib/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
+            
+            # Überprüfen ob Installation erfolgreich war
+            if docker compose version &> /dev/null; then
+                INSTALLED_VERSION=$(docker compose version --short 2>/dev/null || echo "Unbekannt")
+                log_success "Docker Compose wurde erfolgreich installiert: $INSTALLED_VERSION"
+            else
+                log_error "Docker Compose konnte nicht installiert werden."
+                exit 1
+            fi
+        else
+            log_error "Konnte Docker Compose nicht herunterladen."
+            exit 1
+        fi
     fi
 }
 
@@ -204,6 +268,7 @@ configure_firewall() {
     case $OS in
         ubuntu|debian)
             if command -v ufw &> /dev/null; then
+                log_debug "Konfiguriere UFW: Port $HTTP_PORT und $HTTPS_PORT"
                 ufw allow $HTTP_PORT/tcp
                 ufw allow $HTTPS_PORT/tcp
                 if ! ufw status | grep -q "Status: active"; then
@@ -216,6 +281,7 @@ configure_firewall() {
             ;;
         centos|rhel|fedora)
             if command -v firewall-cmd &> /dev/null; then
+                log_debug "Konfiguriere firewalld: Port $HTTP_PORT und $HTTPS_PORT"
                 firewall-cmd --permanent --add-port=$HTTP_PORT/tcp
                 firewall-cmd --permanent --add-port=$HTTPS_PORT/tcp
                 firewall-cmd --reload
@@ -231,40 +297,47 @@ configure_firewall() {
 install_kormit() {
     log_section "Kormit wird installiert"
     
-    # Interaktive Konfiguration, falls nicht über Parameter übergeben und nicht --yes gesetzt
+    # Interaktive Konfiguration mit Timeout
+    local user_install_dir
+    local user_domain
+    local user_http_port
+    local user_https_port
+    local use_https
+    local start_now
+    
     if [ "$INSTALL_DIR" = "/opt/kormit" ] && [ "$SKIP_CONFIRM" = false ]; then
-        read -p "Installationsverzeichnis [/opt/kormit]: " user_install_dir
-        if [ -n "$user_install_dir" ]; then
+        read_with_timeout "Installationsverzeichnis [/opt/kormit]: " "/opt/kormit" "user_install_dir"
+        if [ -n "$user_install_dir" ] && [ "$user_install_dir" != "/opt/kormit" ]; then
             INSTALL_DIR="$user_install_dir"
         fi
     fi
     
     if [ "$DOMAIN_NAME" = "localhost" ] && [ "$SKIP_CONFIRM" = false ]; then
-        read -p "Domain-Name (oder IP-Adresse) [localhost]: " user_domain
-        if [ -n "$user_domain" ]; then
+        read_with_timeout "Domain-Name (oder IP-Adresse) [localhost]: " "localhost" "user_domain"
+        if [ -n "$user_domain" ] && [ "$user_domain" != "localhost" ]; then
             DOMAIN_NAME="$user_domain"
         fi
     fi
     
     if [ "$HTTP_PORT" = "80" ] && [ "$SKIP_CONFIRM" = false ]; then
-        read -p "HTTP-Port [80]: " user_http_port
-        if [ -n "$user_http_port" ]; then
+        read_with_timeout "HTTP-Port [80]: " "80" "user_http_port"
+        if [ -n "$user_http_port" ] && [ "$user_http_port" != "80" ]; then
             HTTP_PORT="$user_http_port"
         fi
     fi
     
     if [ "$USE_HTTPS" = true ] && [ "$SKIP_CONFIRM" = false ]; then
-        read -p "HTTPS verwenden? (j/N): " use_https
-        if [[ ! "$use_https" =~ ^[jJ]$ ]]; then
-            USE_HTTPS=false
-            log_info "HTTP-only-Modus wurde aktiviert."
-        else
+        read_with_timeout "HTTPS verwenden? (j/N): " "N" "use_https"
+        if [[ "$use_https" =~ ^[jJ]$ ]]; then
             if [ "$HTTPS_PORT" = "443" ]; then
-                read -p "HTTPS-Port [443]: " user_https_port
-                if [ -n "$user_https_port" ]; then
+                read_with_timeout "HTTPS-Port [443]: " "443" "user_https_port"
+                if [ -n "$user_https_port" ] && [ "$user_https_port" != "443" ]; then
                     HTTPS_PORT="$user_https_port"
                 fi
             fi
+        else
+            USE_HTTPS=false
+            log_info "HTTP-only-Modus wurde aktiviert."
         fi
     fi
     
@@ -280,7 +353,10 @@ install_kormit() {
     # Installationsverzeichnis erstellen
     log_debug "Erstelle Installationsverzeichnis $INSTALL_DIR"
     mkdir -p $INSTALL_DIR
-    cd $INSTALL_DIR
+    cd $INSTALL_DIR || {
+        log_error "Konnte nicht in Installationsverzeichnis wechseln: $INSTALL_DIR"
+        exit 1
+    }
     
     # Produktionskonfiguration erstellen
     log_info "Konfigurationsdateien werden erstellt..."
@@ -647,11 +723,11 @@ EOL
     fi
     
     log_debug "Schritt: Erstelle Start-Skript"
-    # Start-Skript erstellen - KORRIGIERTER TEIL
+    # Start-Skript erstellen
     if [ "$USE_HTTPS" = true ]; then
         cat > start.sh <<'EOL'
 #!/bin/bash
-cd $(dirname $0)/docker/production
+cd "$(dirname "$0")"/docker/production || { echo "Fehler: Konnte nicht in das Verzeichnis wechseln"; exit 1; }
 docker compose up -d
 echo "Kormit wurde gestartet und ist unter https://DOMAIN_NAME erreichbar."
 EOL
@@ -659,7 +735,7 @@ EOL
     else
         cat > start.sh <<'EOL'
 #!/bin/bash
-cd $(dirname $0)/docker/production
+cd "$(dirname "$0")"/docker/production || { echo "Fehler: Konnte nicht in das Verzeichnis wechseln"; exit 1; }
 docker compose up -d
 echo "Kormit wurde gestartet und ist unter http://DOMAIN_NAME erreichbar."
 EOL
@@ -672,7 +748,7 @@ EOL
     # Stop-Skript erstellen
     cat > stop.sh <<'EOL'
 #!/bin/bash
-cd $(dirname $0)/docker/production
+cd "$(dirname "$0")"/docker/production || { echo "Fehler: Konnte nicht in das Verzeichnis wechseln"; exit 1; }
 docker compose down
 echo "Kormit wurde gestoppt."
 EOL
@@ -683,7 +759,7 @@ EOL
     # Update-Skript erstellen
     cat > update.sh <<'EOL'
 #!/bin/bash
-cd $(dirname $0)/docker/production
+cd "$(dirname "$0")"/docker/production || { echo "Fehler: Konnte nicht in das Verzeichnis wechseln"; exit 1; }
 docker compose pull
 docker compose up -d
 echo "Kormit wurde aktualisiert."
@@ -705,7 +781,7 @@ EOL
     else
         # Automatischen Start anbieten, wenn nicht bereits per Parameter festgelegt und nicht --yes gesetzt
         if [ "$SKIP_CONFIRM" = false ]; then
-            read -p "Möchten Sie Kormit jetzt starten? (j/N): " start_now
+            read_with_timeout "Möchten Sie Kormit jetzt starten? (j/N): " "N" "start_now"
             if [[ "$start_now" =~ ^[jJ]$ ]]; then
                 log_info "Kormit wird gestartet..."
                 "$FULL_PATH/start.sh"
@@ -716,12 +792,20 @@ EOL
 
 # Hauptfunktion
 main() {
+    # Banner anzeigen
     clear
     echo -e "${CYAN}"
     echo "╔═══════════════════════════════════════════════════════════╗"
     echo "║                 KORMIT INSTALLER v${VERSION}                  ║"
     echo "╚═══════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
+    
+    # Systemumgebung anzeigen
+    if [ "$DEBUG" = true ]; then
+        log_debug "Betriebssystem: $(uname -a)"
+        log_debug "CPU-Architektur: $(uname -m)"
+        log_debug "Skript-Ausführungspfad: $(pwd)"
+    fi
     
     # Als Root ausführen
     check_root
