@@ -1,4 +1,4 @@
-version: '3.8'
+#version: '3.8'
 
 # Produktions-Docker-Compose für Kormit
 # Diese Konfiguration ist für den Einsatz auf einem Server optimiert
@@ -26,7 +26,7 @@ services:
       - "5432"
 
   kormit-backend:
-    image: ${BACKEND_IMAGE:-ghcr.io/kormit-panel/kormit/kormit-backend:latest}
+    image: ${BACKEND_IMAGE:-ghcr.io/kormit-panel/kormit/kormit-backend:main}
     container_name: kormit-backend
     restart: unless-stopped
     depends_on:
@@ -51,7 +51,7 @@ services:
       - "8080"
 
   kormit-frontend:
-    image: ${FRONTEND_IMAGE:-ghcr.io/kormit-panel/kormit/kormit-frontend:latest}
+    image: ${FRONTEND_IMAGE:-ghcr.io/kormit-panel/kormit/kormit-frontend:main}
     container_name: kormit-frontend
     restart: unless-stopped
     depends_on:
