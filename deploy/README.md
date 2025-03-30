@@ -311,6 +311,12 @@ Das Schnellstart-Skript bietet ein einfaches Menü zur Verwaltung Ihrer Kormit-I
 - Aktualisieren
 - Status anzeigen
 
+## Änderungen in Version 1.1.5
+
+- **Start-Skript-Fehler vollständig behoben**: Vollständige Bereinigung der Skript-Datei von allen problematischen Kommentaren.
+- **Neues Reparatur-Tool**: Hinzufügung eines Hilfsskripts, um fehlerhafte Start-Skripte automatisch zu korrigieren.
+- **Verbesserte Zuverlässigkeit**: Optimierung der Skript-Generierung für maximale Kompatibilität.
+
 ## Änderungen in Version 1.1.4
 
 - **Start-Skript-Korrektur**: Entfernung von Kommentaren, die fälschlicherweise in das Start-Skript kopiert wurden und es funktionsunfähig machten.
@@ -335,6 +341,26 @@ Das Schnellstart-Skript bietet ein einfaches Menü zur Verwaltung Ihrer Kormit-I
 - **SSL-Zertifikat-Fix**: Die Erstellung der selbstsignierten SSL-Zertifikate wurde verbessert und ist jetzt kompatibel mit verschiedenen OpenSSL-Versionen.
 - **Verbesserte Sicherheit**: Verwendung von SHA-256 für Zertifikate und Hinzufügung von 'localhost' als alternativer Name.
 - **Automatische Anpassung**: Das Installationsskript erkennt die OpenSSL-Version und wählt die passende Methode zur Zertifikatserstellung.
+
+## Fehlerbehebung für bestehende Installationen
+
+Wenn Ihre Kormit-Installation ein fehlerhaftes Start-Skript hat, können Sie es mit diesem Befehl reparieren:
+
+```bash
+sudo curl -sSL https://raw.githubusercontent.com/kormit-panel/kormit/main/deploy/scripts/fix_start_script.sh | sudo bash
+```
+
+Alternativ können Sie das Start-Skript manuell korrigieren:
+
+```bash
+sudo bash -c 'cat > /opt/kormit/start.sh << EOL
+#!/bin/bash
+cd \$(dirname \$0)/docker/production
+docker compose up -d
+echo "Kormit wurde gestartet und ist unter http://localhost erreichbar."
+EOL'
+sudo chmod +x /opt/kormit/start.sh
+```
 
 ## HTTP-only Modus
 

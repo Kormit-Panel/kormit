@@ -3,7 +3,7 @@
 # Unterstützt: Ubuntu, Debian, CentOS, RHEL
 
 # Version
-VERSION="1.1.4"
+VERSION="1.1.5"
 
 # Parameter verarbeiten
 INSTALL_DIR="/opt/kormit"
@@ -755,5 +755,3 @@ main() {
 
 # Skript ausführen
 main
-
-# Diese Kommentare am Ende der Datei entfernen

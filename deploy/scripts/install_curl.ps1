@@ -1,4 +1,5 @@
 # Kormit Curl Installer für Windows
+# Version 1.1.5
 # Dieses Skript erlaubt die Installation von Kormit direkt über PowerShell
 
 # Basis-URL zum Kormit-Repository

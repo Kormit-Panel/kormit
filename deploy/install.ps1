@@ -2,7 +2,7 @@
 # Dieses Skript installiert Kormit auf einem Windows-Server mit Docker Desktop
 
 # Version
-$Version = "1.1.4"
+$Version = "1.1.5"
 
 param (
     [string]$InstallDir = "C:\kormit",
