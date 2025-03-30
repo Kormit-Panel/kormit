@@ -56,7 +56,7 @@ Der schnellste Weg, um Kormit zu starten:
 
 ```bash
 # Automatische Installation
-curl -sSL https://github.com/Kormit-Panel/kormit/raw/refs/heads/main/deploy/kormit-setup.sh | sudo bash
+bash <(curl -sSL https://github.com/Kormit-Panel/kormit/raw/refs/heads/main/deploy/kormit-setup.sh)
 
 # Nach der Installation, starte Kormit
 sudo kormit
@@ -71,7 +71,7 @@ Nach der Installation ist Kormit unter `http://localhost` (oder `https://localho
 Die einfachste Methode, um Kormit zu installieren, ist unser automatisches Setup-Skript:
 
 ```bash
-curl -sSL https://github.com/Kormit-Panel/kormit/raw/refs/heads/main/deploy/kormit-setup.sh | sudo bash
+bash <(curl -sSL https://github.com/Kormit-Panel/kormit/raw/refs/heads/main/deploy/kormit-setup.sh)
 ```
 
 Das Skript überprüft alle Abhängigkeiten, lädt die neueste Version herunter und richtet alles für dich ein.
