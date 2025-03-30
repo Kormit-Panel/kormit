@@ -647,30 +647,32 @@ EOL
     fi
     
     log_debug "Schritt: Erstelle Start-Skript"
-    # Start-Skript erstellen
+    # Start-Skript erstellen - KORRIGIERTER TEIL
     if [ "$USE_HTTPS" = true ]; then
-        cat > start.sh <<EOL
+        cat > start.sh <<'EOL'
 #!/bin/bash
-cd \$(dirname \$0)/docker/production
+cd $(dirname $0)/docker/production
 docker compose up -d
-echo "Kormit wurde gestartet und ist unter https://$DOMAIN_NAME erreichbar."
+echo "Kormit wurde gestartet und ist unter https://DOMAIN_NAME erreichbar."
 EOL
+        sed -i "s/DOMAIN_NAME/$DOMAIN_NAME/g" start.sh
     else
-        cat > start.sh <<EOL
+        cat > start.sh <<'EOL'
 #!/bin/bash
-cd \$(dirname \$0)/docker/production
+cd $(dirname $0)/docker/production
 docker compose up -d
-echo "Kormit wurde gestartet und ist unter http://$DOMAIN_NAME erreichbar."
+echo "Kormit wurde gestartet und ist unter http://DOMAIN_NAME erreichbar."
 EOL
+        sed -i "s/DOMAIN_NAME/$DOMAIN_NAME/g" start.sh
     fi
     
     chmod +x start.sh
     
     log_debug "Schritt: Erstelle Stop-Skript"
     # Stop-Skript erstellen
-    cat > stop.sh <<EOL
+    cat > stop.sh <<'EOL'
 #!/bin/bash
-cd \$(dirname \$0)/docker/production
+cd $(dirname $0)/docker/production
 docker compose down
 echo "Kormit wurde gestoppt."
 EOL
@@ -679,9 +681,9 @@ EOL
     
     log_debug "Schritt: Erstelle Update-Skript"
     # Update-Skript erstellen
-    cat > update.sh <<EOL
+    cat > update.sh <<'EOL'
 #!/bin/bash
-cd \$(dirname \$0)/docker/production
+cd $(dirname $0)/docker/production
 docker compose pull
 docker compose up -d
 echo "Kormit wurde aktualisiert."
