@@ -311,6 +311,11 @@ Das Schnellstart-Skript bietet ein einfaches Menü zur Verwaltung Ihrer Kormit-I
 - Aktualisieren
 - Status anzeigen
 
+## Änderungen in Version 1.1.4
+
+- **Start-Skript-Korrektur**: Entfernung von Kommentaren, die fälschlicherweise in das Start-Skript kopiert wurden und es funktionsunfähig machten.
+- **Verbesserte Skript-Bereinigung**: Optimierung des Installationsskripts, um unerwünschtes Übertragen von Kommentaren zu verhindern.
+
 ## Änderungen in Version 1.1.3
 
 - **Pfadproblem behoben**: Korrektur eines Fehlers, der dazu führte, dass der falsche Installationspfad in den abschließenden Meldungen angezeigt wurde.

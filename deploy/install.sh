@@ -3,7 +3,7 @@
 # Unterstützt: Ubuntu, Debian, CentOS, RHEL
 
 # Version
-VERSION="1.1.3"
+VERSION="1.1.4"
 
 # Parameter verarbeiten
 INSTALL_DIR="/opt/kormit"
@@ -756,8 +756,4 @@ main() {
 # Skript ausführen
 main
 
-# Dieser Code wird ausgeführt, wenn das Skript direkt aufgerufen wird
-# Wenn das Skript mit curl ausgeführt wird, wird diese Zeile nicht ausgeführt werden
-
-# Damit das Skript per curl ausführbar ist, füge diese Zeilen am Ende der Datei hinzu
-# curl -sSL https://domain.com/install.sh | bash
+# Diese Kommentare am Ende der Datei entfernen

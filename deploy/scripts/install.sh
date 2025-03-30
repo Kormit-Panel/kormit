@@ -1,6 +1,6 @@
 #!/bin/bash
 # Kormit Installationshelfer - Plattformerkennung
-# Version 1.1.3 - Korrektur von Pfadproblemen und Verbesserung der Kompatibilität
+# Version 1.1.4 - Korrektur eines Fehlers im Start-Skript (Kommentarkopie)
 
 # Farbige Ausgaben
 RED='\033[0;31m'
