@@ -3,7 +3,7 @@
 # Unterstützt: Ubuntu, Debian, CentOS, RHEL
 
 # Version
-VERSION="1.1.2"
+VERSION="1.1.3"
 
 # Parameter verarbeiten
 INSTALL_DIR="/opt/kormit"
@@ -690,19 +690,23 @@ EOL
     chmod +x update.sh
     
     log_success "Kormit wurde erfolgreich installiert."
-    log_info "Führen Sie '$INSTALL_DIR/start.sh' aus, um Kormit zu starten."
+    
+    # Zeige den absoluten Pfad an, nicht die relativen Pfade
+    FULL_PATH="$INSTALL_DIR"
+    
+    log_info "Führen Sie '$FULL_PATH/start.sh' aus, um Kormit zu starten."
     
     # Automatischen Start ausführen, falls konfiguriert
     if [ "$AUTO_START" = true ]; then
         log_info "Kormit wird gestartet..."
-        $INSTALL_DIR/start.sh
+        "$FULL_PATH/start.sh"
     else
         # Automatischen Start anbieten, wenn nicht bereits per Parameter festgelegt und nicht --yes gesetzt
         if [ "$SKIP_CONFIRM" = false ]; then
             read -p "Möchten Sie Kormit jetzt starten? (j/N): " start_now
             if [[ "$start_now" =~ ^[jJ]$ ]]; then
                 log_info "Kormit wird gestartet..."
-                $INSTALL_DIR/start.sh
+                "$FULL_PATH/start.sh"
             fi
         fi
     fi
@@ -736,7 +740,11 @@ main() {
     
     log_section "Installation abgeschlossen"
     log_success "Kormit wurde erfolgreich installiert!"
-    log_info "Führen Sie '$INSTALL_DIR/start.sh' aus, um Kormit zu starten."
+    
+    # Zeige den absoluten Pfad an, nicht die relativen Pfade
+    FULL_PATH="$INSTALL_DIR"
+    
+    log_info "Führen Sie '$FULL_PATH/start.sh' aus, um Kormit zu starten."
     if [ "$USE_HTTPS" = true ]; then
         log_info "Anschließend können Sie Kormit unter https://$DOMAIN_NAME aufrufen."
         log_warning "Ersetzen Sie das selbstsignierte SSL-Zertifikat für Produktionsumgebungen durch ein gültiges Zertifikat."

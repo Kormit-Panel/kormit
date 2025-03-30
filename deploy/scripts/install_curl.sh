@@ -30,10 +30,10 @@ chmod +x "$TEMP_SCRIPT"
 
 # Parameter an das Skript weiterleiten
 ./"$TEMP_SCRIPT" "$@"
-RESULT=$?
+EXIT_CODE=$?
 
 # Aufräumen
 rm -f "$TEMP_SCRIPT"
 
 echo -e "${GREEN}Installation abgeschlossen!${NC}"
-exit $RESULT 
+exit $EXIT_CODE 
