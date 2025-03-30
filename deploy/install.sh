@@ -3,7 +3,7 @@
 # Unterstützt: Ubuntu, Debian, CentOS, RHEL
 
 # Version
-VERSION="1.1.8"
+VERSION="1.1.9"
 
 # Parameter verarbeiten
 INSTALL_DIR="/opt/kormit"
@@ -315,15 +315,27 @@ install_kormit() {
         fi
     fi
     
-    # Stelle sicher, dass INSTALL_DIR ein absoluter Pfad ist und keine Kommandosubstitution enthält
+    # Stelle sicher, dass INSTALL_DIR ein absoluter Pfad ist
     if [[ "$INSTALL_DIR" != /* ]]; then
         install_dir_absolute="$(pwd)/$INSTALL_DIR"
     else
         install_dir_absolute="$INSTALL_DIR"
     fi
     
-    # Entferne mögliche Kommandosubstitution aus dem Pfad
-    INSTALL_DIR=$(echo "$install_dir_absolute" | sed 's/EXIT_CODE=[0-9]*//')
+    # Entferne nur EXIT_CODE=X aus dem Pfad, aber nicht den kormit-Teil
+    INSTALL_DIR=$(echo "$install_dir_absolute" | sed 's/EXIT_CODE=[0-9]*//g')
+    
+    # Entferne doppelte Schrägstriche
+    INSTALL_DIR=$(echo "$INSTALL_DIR" | sed 's/\/\//\//g')
+    
+    # Stelle sicher, dass der Pfad auf /opt/kormit endet, falls er auf /opt/ endet
+    if [ "$INSTALL_DIR" = "/opt/" ]; then
+        INSTALL_DIR="/opt/kormit"
+    elif [ "$INSTALL_DIR" = "/opt" ]; then
+        INSTALL_DIR="/opt/kormit"
+    fi
+    
+    log_debug "Finaler Installationspfad: $INSTALL_DIR"
     
     if [ "$DOMAIN_NAME" = "localhost" ] && [ "$SKIP_CONFIRM" = false ]; then
         read_with_timeout "Domain-Name (oder IP-Adresse) [localhost]: " "localhost" "user_domain"
@@ -782,11 +794,8 @@ EOL
     
     log_success "Kormit wurde erfolgreich installiert."
     
-    # Pfad umwandeln in String und eventuellen EXIT_CODE=0 entfernen
-    FINAL_PATH=$(echo "$INSTALL_DIR" | sed 's/EXIT_CODE=[0-9]*//')
-    
-    # Direkte Ausgabe des Pfades ohne Subshell oder andere Konstrukte die Werte einfügen könnten
-    log_info "Führen Sie '$(printf '%s' "$FINAL_PATH")/start.sh' aus, um Kormit zu starten."
+    # Direkte Ausgabe des Pfades ohne Zwischenvariable
+    log_info "Führen Sie '$INSTALL_DIR/start.sh' aus, um Kormit zu starten."
     
     # Automatischen Start ausführen, falls konfiguriert
     if [ "$AUTO_START" = true ]; then
@@ -841,11 +850,8 @@ main() {
     log_section "Installation abgeschlossen"
     log_success "Kormit wurde erfolgreich installiert!"
     
-    # Pfad umwandeln in String und eventuellen EXIT_CODE=0 entfernen
-    FINAL_PATH=$(echo "$INSTALL_DIR" | sed 's/EXIT_CODE=[0-9]*//')
-    
-    # Direkte Ausgabe des Pfades ohne Subshell oder andere Konstrukte die Werte einfügen könnten
-    log_info "Führen Sie '$(printf '%s' "$FINAL_PATH")/start.sh' aus, um Kormit zu starten."
+    # Direkte Ausgabe des Pfades ohne Zwischenvariable
+    log_info "Führen Sie '$INSTALL_DIR/start.sh' aus, um Kormit zu starten."
     
     if [ "$USE_HTTPS" = true ]; then
         log_info "Anschließend können Sie Kormit unter https://$DOMAIN_NAME aufrufen."
