@@ -161,7 +161,29 @@ esac
 # Aufräumen
 rm -rf "$TMP_DIR"
 
+# Kormit-Befehl erstellen
+echo -e "\n${CYAN}▶ Erstelle 'kormit' Systembefehl...${RESET}"
+
+# Den Pfad zum Installationsverzeichnis verwenden (falls angepasst)
+MANAGE_SCRIPT="${INSTALL_DIR:-/opt/kormit}/manage.sh"
+
+# Wrapper-Skript erstellen
+KORMIT_WRAPPER="/usr/local/bin/kormit"
+
+cat > "$KORMIT_WRAPPER" << EOL
+#!/bin/bash
+# Kormit-Befehl Wrapper
+sudo ${MANAGE_SCRIPT} "\$@"
+EOL
+
+# Ausführbar machen
+chmod +x "$KORMIT_WRAPPER"
+
+echo -e "${GREEN}✅ Kormit-Befehl erfolgreich eingerichtet.${RESET}"
+
 echo -e "\n${GREEN}${BOLD}Setup abgeschlossen!${RESET}"
-echo -e "Sie können das Management-Skript jederzeit mit dem Befehl ausführen:"
-echo -e "${BOLD}sudo /opt/kormit/manage.sh${RESET} (oder dem von Ihnen gewählten Installationsverzeichnis)"
+echo -e "Sie können Kormit nun auf zwei Arten verwenden:"
+echo -e "1. Über den globalen Befehl: ${BOLD}kormit${RESET}"
+echo -e "2. Direkt über das Skript: ${BOLD}sudo ${MANAGE_SCRIPT}${RESET}"
+echo -e "\nBitte beachten: Der 'kormit'-Befehl verwendet intern sudo."
 echo -e "\nVielen Dank, dass Sie Kormit verwenden!"
