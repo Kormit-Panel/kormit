@@ -386,3 +386,15 @@ Im HTTP-only-Modus:
 - Die Installation ist einfacher und vermeidet mögliche SSL-Konfigurationsprobleme
 
 **Hinweis:** Für Produktionsumgebungen wird die Verwendung von HTTPS dringend empfohlen.
+
+## Problembehebung: Manuelle Installation
+
+Wenn Sie Probleme mit dem regulären Installationsskript haben, können Sie die manuelle Installation verwenden:
+
+### Linux/MacOS
+
+```bash
+curl -sSL https://raw.githubusercontent.com/kormit-panel/kormit/main/deploy/scripts/install_manual.sh | bash
+```
+
+Die manuelle Installation bietet eine vereinfachte Version, die das reguläre Installationsskript umgeht und direkt die notwendigen Dateien erstellt.
