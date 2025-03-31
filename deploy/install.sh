@@ -87,7 +87,6 @@ fi
 # Verzeichnisstruktur erstellen
 echo -e "\n${CYAN}▶ Erstelle Verzeichnisstruktur...${RESET}"
 mkdir -p "${INSTALL_DIR}/docker/production"
-mkdir -p "${INSTALL_DIR}/docker/production/ssl"
 mkdir -p "${INSTALL_DIR}/docker/production/logs"
 
 # Docker-Compose-Datei kopieren
@@ -121,33 +120,15 @@ TIMEZONE=UTC
 VOLUME_PREFIX=kormit
 NETWORK_NAME=kormit-network
 HTTP_PORT=${HTTP_PORT}
-HTTPS_PORT=${HTTPS_PORT}
 
 # Image-Konfiguration
 BACKEND_IMAGE=${BACKEND_IMAGE}
 FRONTEND_IMAGE=${FRONTEND_IMAGE}
 EOL
 
-# Erstelle selbstsigniertes Zertifikat für HTTPS, falls benötigt
+# HTTPS ist aktuell nicht unterstützt
 if [ "$HTTP_ONLY" = false ]; then
-    echo -e "${CYAN}▶ Erstelle selbstsigniertes SSL-Zertifikat...${RESET}"
-    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-        -keyout "${INSTALL_DIR}/docker/production/ssl/kormit.key" \
-        -out "${INSTALL_DIR}/docker/production/ssl/kormit.crt" \
-        -subj "/CN=${DOMAIN_NAME}" -addext "subjectAltName=DNS:${DOMAIN_NAME}"
-    
-    # HTTPS-Konfiguration aktivieren
-    sed -i 's|# Standardkonfiguration für HTTP-only|# HTTPS-Konfiguration aktiviert|g' "${INSTALL_DIR}/docker/production/nginx.conf"
-    
-    echo -e "${GREEN}✅ SSL-Zertifikat wurde erstellt.${RESET}"
-else
-    echo -e "${YELLOW}⚠️ HTTPS deaktiviert, kein SSL-Zertifikat erstellt.${RESET}"
-    # Erstelle leere Dateien, damit Nginx nicht fehlschlägt
-    touch "${INSTALL_DIR}/docker/production/ssl/kormit.key"
-    touch "${INSTALL_DIR}/docker/production/ssl/kormit.crt"
-    
-    # Stelle sicher, dass nur HTTP-Port in docker-compose.yml freigegeben ist
-    sed -i "s|- \".*:443:443\"||g" "${INSTALL_DIR}/docker/production/docker-compose.yml"
+    echo -e "${YELLOW}⚠️ HTTPS wird derzeit nicht unterstützt. Installation wird mit HTTP fortgesetzt.${RESET}"
 fi
 
 # Erstelle Hilfsskripte
@@ -202,12 +183,7 @@ if [[ ! "$start_now" =~ ^[nN]$ ]]; then
     
     echo -e "\n${GREEN}✅ Kormit wurde erfolgreich installiert und gestartet!${RESET}"
     echo -e "${CYAN}Sie können nun auf Kormit zugreifen unter:${RESET}"
-    
-    if [ "$HTTP_ONLY" = true ]; then
-        echo -e "  http://${ACCESS_URL}:${HTTP_PORT}"
-    else
-        echo -e "  https://${ACCESS_URL}:${HTTPS_PORT}"
-    fi
+    echo -e "  http://${ACCESS_URL}:${HTTP_PORT}"
 else
     echo -e "\n${GREEN}✅ Kormit wurde erfolgreich installiert!${RESET}"
     echo -e "${CYAN}Verwenden Sie '${INSTALL_DIR}/start.sh', um Kormit zu starten.${RESET}"
