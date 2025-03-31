@@ -88,6 +88,7 @@ fi
 echo -e "\n${CYAN}▶ Erstelle Verzeichnisstruktur...${RESET}"
 mkdir -p "${INSTALL_DIR}/docker/production"
 mkdir -p "${INSTALL_DIR}/docker/production/logs"
+mkdir -p "${INSTALL_DIR}/docker/production/ssl"
 
 # Docker-Compose-Datei kopieren
 echo -e "${CYAN}▶ Kopiere Docker-Compose-Konfiguration...${RESET}"
@@ -120,15 +121,44 @@ TIMEZONE=UTC
 VOLUME_PREFIX=kormit
 NETWORK_NAME=kormit-network
 HTTP_PORT=${HTTP_PORT}
+HTTPS_PORT=${HTTPS_PORT}
 
 # Image-Konfiguration
 BACKEND_IMAGE=${BACKEND_IMAGE}
 FRONTEND_IMAGE=${FRONTEND_IMAGE}
 EOL
 
-# HTTPS ist aktuell nicht unterstützt
+# HTTPS-Konfiguration
 if [ "$HTTP_ONLY" = false ]; then
-    echo -e "${YELLOW}⚠️ HTTPS wird derzeit nicht unterstützt. Installation wird mit HTTP fortgesetzt.${RESET}"
+    echo -e "${CYAN}▶ Aktiviere HTTPS und erstelle SSL-Zertifikat...${RESET}"
+    
+    # Erstelle selbstsigniertes Zertifikat
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+        -keyout "${INSTALL_DIR}/docker/production/ssl/kormit.key" \
+        -out "${INSTALL_DIR}/docker/production/ssl/kormit.crt" \
+        -subj "/CN=${DOMAIN_NAME}" -addext "subjectAltName=DNS:${DOMAIN_NAME}"
+    
+    # Modifiziere die HTTP-Konfiguration, um auf HTTPS weiterzuleiten
+    # Ersetze den HTTP-Standort-Block mit einer Umleitung zu HTTPS
+    sed -i '/# HTTP-Handling - wird durch das Installationsskript konfiguriert/,/location \/ {/!b; /location \/ {/a\
+        return 301 https://$host$request_uri;' "${INSTALL_DIR}/docker/production/nginx.conf"
+    
+    # Entferne alle Zeilen zwischen "location / {" und dem nächsten "}"
+    sed -i '/# HTTP-Handling.*konfiguriert/,/location \/ {/!b; /location \/ {/,/}/{//!d}' "${INSTALL_DIR}/docker/production/nginx.conf"
+    
+    echo -e "${GREEN}✅ HTTPS wurde aktiviert und ein selbstsigniertes SSL-Zertifikat wurde erstellt.${RESET}"
+    echo -e "${YELLOW}⚠️ Hinweis: Da es sich um ein selbstsigniertes Zertifikat handelt, werden Browser eine Warnung anzeigen.${RESET}"
+else
+    echo -e "${CYAN}▶ Verwende nur HTTP (kein HTTPS)...${RESET}"
+    
+    # Erstelle leere Zertifikatsdateien für Nginx
+    touch "${INSTALL_DIR}/docker/production/ssl/kormit.key"
+    touch "${INSTALL_DIR}/docker/production/ssl/kormit.crt"
+    
+    # Entferne den HTTPS-Port aus der docker-compose.yml
+    sed -i '/- "${HTTPS_PORT:-443}:443"/d' "${INSTALL_DIR}/docker/production/docker-compose.yml"
+    
+    echo -e "${GREEN}✅ HTTP-only Modus wurde konfiguriert.${RESET}"
 fi
 
 # Erstelle Hilfsskripte
@@ -183,7 +213,12 @@ if [[ ! "$start_now" =~ ^[nN]$ ]]; then
     
     echo -e "\n${GREEN}✅ Kormit wurde erfolgreich installiert und gestartet!${RESET}"
     echo -e "${CYAN}Sie können nun auf Kormit zugreifen unter:${RESET}"
-    echo -e "  http://${ACCESS_URL}:${HTTP_PORT}"
+    
+    if [ "$HTTP_ONLY" = true ]; then
+        echo -e "  http://${ACCESS_URL}:${HTTP_PORT}"
+    else
+        echo -e "  https://${ACCESS_URL}:${HTTPS_PORT}"
+    fi
 else
     echo -e "\n${GREEN}✅ Kormit wurde erfolgreich installiert!${RESET}"
     echo -e "${CYAN}Verwenden Sie '${INSTALL_DIR}/start.sh', um Kormit zu starten.${RESET}"
