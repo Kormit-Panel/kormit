@@ -81,13 +81,9 @@ services:
       - kormit-frontend
     networks:
       - kormit-network
-    environment:
-      - DOMAIN_NAME=${DOMAIN_NAME:-localhost}
-    healthcheck:
-      test: ["CMD", "nginx", "-t"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    # Direktes Nginx-Environment ohne Templatevorverarbeitung
+    # environment:
+    #   - DOMAIN_NAME=${DOMAIN_NAME:-localhost}
 
 volumes:
   postgres_data:

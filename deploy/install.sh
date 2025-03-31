@@ -18,7 +18,7 @@ INSTALL_DIR="/opt/kormit"
 DOMAIN_NAME="localhost"
 HTTP_PORT="80"
 HTTPS_PORT="443"
-HTTP_ONLY=false
+HTTP_ONLY=true  # Standardmäßig nur HTTP verwenden
 
 # Hilfefunktion
 show_help() {
@@ -28,8 +28,8 @@ show_help() {
     echo "  --install-dir=DIR    Installationsverzeichnis (Standard: /opt/kormit)"
     echo "  --domain=DOMAIN      Domain-Name oder IP-Adresse (Standard: localhost)"
     echo "  --http-port=PORT     HTTP-Port (Standard: 80)"
-    echo "  --https-port=PORT    HTTPS-Port (Standard: 443)"
-    echo "  --http-only          Nur HTTP verwenden, kein HTTPS"
+    echo "  --https-port=PORT    HTTPS-Port (Standard: 443, nur mit --use-https)"
+    echo "  --use-https          HTTPS aktivieren (Standard: deaktiviert)"
     echo "  --help               Diese Hilfe anzeigen"
     echo ""
     exit 0
@@ -50,8 +50,8 @@ for i in "$@"; do
         --https-port=*)
             HTTPS_PORT="${i#*=}"
             ;;
-        --http-only)
-            HTTP_ONLY=true
+        --use-https)
+            HTTP_ONLY=false
             ;;
         --help)
             show_help
@@ -136,12 +136,18 @@ if [ "$HTTP_ONLY" = false ]; then
         -out "${INSTALL_DIR}/docker/production/ssl/kormit.crt" \
         -subj "/CN=${DOMAIN_NAME}" -addext "subjectAltName=DNS:${DOMAIN_NAME}"
     
+    # HTTPS-Konfiguration aktivieren
+    sed -i 's|# Standardkonfiguration für HTTP-only|# HTTPS-Konfiguration aktiviert|g' "${INSTALL_DIR}/docker/production/nginx.conf"
+    
     echo -e "${GREEN}✅ SSL-Zertifikat wurde erstellt.${RESET}"
 else
     echo -e "${YELLOW}⚠️ HTTPS deaktiviert, kein SSL-Zertifikat erstellt.${RESET}"
     # Erstelle leere Dateien, damit Nginx nicht fehlschlägt
     touch "${INSTALL_DIR}/docker/production/ssl/kormit.key"
     touch "${INSTALL_DIR}/docker/production/ssl/kormit.crt"
+    
+    # Stelle sicher, dass nur HTTP-Port in docker-compose.yml freigegeben ist
+    sed -i "s|- \".*:443:443\"||g" "${INSTALL_DIR}/docker/production/docker-compose.yml"
 fi
 
 # Erstelle Hilfsskripte
