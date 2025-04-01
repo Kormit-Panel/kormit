@@ -19,7 +19,8 @@ services:
       - KORMIT_SECRET_KEY=dev-secret-key 
       - KORMIT_DEV_MODE=true 
     depends_on: 
-      - kormit-db-dev 
+      kormit-db-dev:
+        condition: service_healthy
     # Verwende go run direkt für die Entwicklung
     entrypoint: ["/bin/sh", "-c", "if [ ! -f /app/go.mod ]; then echo 'Error: go.mod not found'; exit 1; fi && go run cmd/kormit/main.go"]
  
@@ -31,17 +32,28 @@ services:
         - NODE_VERSION=20
     container_name: kormit-frontend-dev 
     restart: unless-stopped 
-    ports: 
-      - "8081:8080" 
     volumes: 
       - ../../../frontend:/app
-    depends_on: 
-      - kormit-backend-dev 
     environment:
       - NODE_ENV=development
       - VITE_API_URL=http://localhost:8080
-    command: /bin/sh -c "ls -la && node -v && npm -v && npm run dev -- --host 0.0.0.0"
+    command: /bin/sh -c "npm run dev -- --host 0.0.0.0"
+    depends_on:
+      - kormit-backend-dev
  
+  kormit-nginx:
+    image: nginx:stable-alpine
+    container_name: kormit-nginx
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    volumes:
+      - ../../../frontend:/app
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - kormit-frontend-dev
+      - kormit-backend-dev
+
   kormit-db-dev: 
     image: postgres:13 
     container_name: kormit-db-dev 

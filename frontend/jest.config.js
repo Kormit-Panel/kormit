@@ -13,6 +13,5 @@ module.exports = {
   testEnvironmentOptions: {
     customExportConditions: ['node', 'node-addons'],
   },
-  // Wichtig: Mit --passWithNoTests werden die Tests auch bestanden, wenn keine vorhanden sind
   passWithNoTests: true
 } 
