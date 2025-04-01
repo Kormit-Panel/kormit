@@ -673,6 +673,177 @@ offer_repair_scripts() {
     fi
 }
 
+# Neue Reparaturfunktion für SSL-Probleme
+fix_nginx_ssl() {
+    print_header "Nginx SSL-Konfiguration wird repariert"
+    
+    # Stelle sicher, dass das SSL-Verzeichnis existiert
+    mkdir -p "$INSTALL_DIR/docker/production/ssl"
+    
+    # Überprüfen, ob SSL-Zertifikate vorhanden sind
+    if [ ! -s "$INSTALL_DIR/docker/production/ssl/kormit.crt" ] || [ ! -s "$INSTALL_DIR/docker/production/ssl/kormit.key" ]; then
+        log_warning "SSL-Zertifikate fehlen oder sind leer."
+        
+        # Frage, ob HTTP-only-Modus verwendet werden soll
+        echo -e "${YELLOW}Möchten Sie den HTTP-only-Modus verwenden (empfohlen für Entwicklung)? [J/n]${RESET}"
+        read -p "> " use_http_only
+        
+        if [[ "$use_http_only" =~ ^[Nn]$ ]]; then
+            # Erstelle selbstsignierte Zertifikate für HTTPS
+            log_info "Erstelle selbstsignierte SSL-Zertifikate..."
+            
+            # Stelle sicher, dass OpenSSL installiert ist
+            if ! command -v openssl &> /dev/null; then
+                log_error "OpenSSL ist nicht installiert. Bitte installieren Sie es und versuchen Sie es erneut."
+                return 1
+            fi
+            
+            # Erstelle die Zertifikate
+            openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+                -keyout "$INSTALL_DIR/docker/production/ssl/kormit.key" \
+                -out "$INSTALL_DIR/docker/production/ssl/kormit.crt" \
+                -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost"
+            
+            log_success "Selbstsignierte SSL-Zertifikate wurden erstellt."
+        else
+            # Konfiguriere für HTTP-only und erstelle leere Zertifikatsdateien
+            log_info "Konfiguriere für HTTP-only-Modus..."
+            
+            # Erstelle leere Zertifikatsdateien
+            touch "$INSTALL_DIR/docker/production/ssl/kormit.key"
+            touch "$INSTALL_DIR/docker/production/ssl/kormit.crt"
+            
+            # Passe die Nginx-Konfiguration an (entferne HTTPS)
+            log_info "Passe Nginx-Konfiguration an..."
+            
+            # Sicherungskopie erstellen
+            cp "$INSTALL_DIR/docker/production/nginx.conf" "$INSTALL_DIR/docker/production/nginx.conf.bak"
+            
+            # Erzeuge eine neue Konfiguration ohne HTTPS
+            cat > "$INSTALL_DIR/docker/production/nginx.conf" << EOL
+# Kormit Nginx Konfiguration
+# HTTP-only Version
+
+log_format kormit_log '\$remote_addr - \$remote_user [\$time_local] '
+                     '"\$request" \$status \$body_bytes_sent '
+                     '"\$http_referer" "\$http_user_agent" "\$http_x_forwarded_for"';
+
+# Upstream-Definitionen für Load Balancing
+upstream kormit_backend {
+    server kormit-backend:8080;
+}
+
+upstream kormit_frontend {
+    server kormit-frontend:80;
+}
+
+# HTTP-Server
+server {
+    listen 80;
+    listen [::]:80;
+    server_name localhost;
+    
+    access_log /var/log/nginx/access.log kormit_log;
+    error_log /var/log/nginx/error.log warn;
+    
+    # Client-Body-Größe erhöhen für Uploads
+    client_max_body_size 50M;
+    
+    # Gzip-Kompression aktivieren
+    gzip on;
+    gzip_types text/plain text/css application/javascript application/json application/xml;
+    gzip_min_length 1000;
+    
+    # Cache-Header für statische Assets
+    location ~* \\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)\$ {
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000";
+        access_log off;
+        
+        # Erst Frontend für statische Assets prüfen
+        proxy_pass http://kormit_frontend;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+    
+    # Frontend-Routing (Vue Router History Mode)
+    location / {
+        proxy_pass http://kormit_frontend;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        
+        # Wichtig für Vue Router History Mode
+        try_files \$uri \$uri/ /index.html;
+    }
+    
+    # API-Anfragen zum Backend weiterleiten
+    location /api/ {
+        proxy_pass http://kormit_backend/api/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        
+        # CORS-Header hinzufügen
+        add_header 'Access-Control-Allow-Origin' '*' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
+        add_header 'Access-Control-Allow-Headers' 'Origin, X-Requested-With, Content-Type, Accept, Authorization' always;
+        add_header 'Access-Control-Allow-Credentials' 'true' always;
+        
+        # Preflight-Anfragen behandeln
+        if (\$request_method = 'OPTIONS') {
+            add_header 'Access-Control-Allow-Origin' '*' always;
+            add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
+            add_header 'Access-Control-Allow-Headers' 'Origin, X-Requested-With, Content-Type, Accept, Authorization' always;
+            add_header 'Access-Control-Allow-Credentials' 'true' always;
+            add_header 'Content-Type' 'text/plain charset=UTF-8';
+            add_header 'Content-Length' 0;
+            return 204;
+        }
+        
+        # Timeout-Einstellungen für API-Anfragen
+        proxy_connect_timeout 300;
+        proxy_send_timeout 300;
+        proxy_read_timeout 300;
+        send_timeout 300;
+    }
+    
+    # Websocket-Support für Live-Updates
+    location /ws {
+        proxy_pass http://kormit_backend/ws;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+    
+    # Gesundheitscheck-Endpunkt
+    location /health {
+        add_header Content-Type text/plain;
+        return 200 'OK';
+    }
+}
+EOL
+            
+            # Entferne den HTTPS-Port aus der docker-compose.yml
+            sed -i 's/- "${HTTPS_PORT:-443}:443"/#- "${HTTPS_PORT:-443}:443"/' "$INSTALL_DIR/docker/production/docker-compose.yml"
+            
+            log_success "Nginx wurde auf HTTP-only konfiguriert."
+        fi
+    else
+        log_success "SSL-Zertifikate sind vorhanden."
+    fi
+    
+    log_success "Nginx-Konfiguration wurde repariert."
+}
+
 # Interaktives Menü
 show_menu() {
     print_logo
@@ -691,13 +862,14 @@ show_menu() {
     echo -e "9) ${BOLD}Status anzeigen${RESET} - Aktuellen Dienststatus prüfen"
     echo -e "10) ${BOLD}Installation reparieren${RESET} - Erweiterte Reparaturfunktionen"
     echo -e "11) ${BOLD}Image-Tags korrigieren${RESET} - Manifest-unknown-Fehler beheben"
+    echo -e "12) ${BOLD}Nginx SSL-Konfiguration reparieren${RESET} - SSL-Probleme beheben"
     echo -e "${CYAN}───────────────────────────${RESET}"
-    echo -e "12) ${BOLD}Debug-Modus${RESET} - Toggle Debug (aktuell: $([ "$DEBUG" = true ] && echo "AN" || echo "AUS"))"
-    echo -e "13) ${BOLD}Installationsverzeichnis ändern${RESET} - (aktuell: $INSTALL_DIR)"
+    echo -e "13) ${BOLD}Debug-Modus${RESET} - Toggle Debug (aktuell: $([ "$DEBUG" = true ] && echo "AN" || echo "AUS"))"
+    echo -e "14) ${BOLD}Installationsverzeichnis ändern${RESET} - (aktuell: $INSTALL_DIR)"
     echo -e "${CYAN}───────────────────────────${RESET}"
     echo -e "0) ${BOLD}Beenden${RESET} - Programm beenden"
     echo ""
-    echo -e "Wählen Sie eine Option (0-13):"
+    echo -e "Wählen Sie eine Option (0-14):"
     read -p "> " choice
     
     case $choice in
@@ -745,6 +917,10 @@ show_menu() {
             press_enter_to_continue
             ;;
         12)
+            fix_nginx_ssl
+            show_menu
+            ;;
+        13)
             if [ "$DEBUG" = true ]; then
                 DEBUG=false
                 log_info "Debug-Modus deaktiviert."
@@ -754,7 +930,7 @@ show_menu() {
             fi
             press_enter_to_continue
             ;;
-        13)
+        14)
             echo -e "Aktuelles Installationsverzeichnis: ${BOLD}$INSTALL_DIR${RESET}"
             read -p "Neues Installationsverzeichnis eingeben: " new_dir
             if [ -n "$new_dir" ]; then
@@ -768,7 +944,7 @@ show_menu() {
             exit 0
             ;;
         *)
-            log_error "Ungültige Option. Bitte wählen Sie eine Zahl zwischen 0 und 13."
+            log_error "Ungültige Option. Bitte wählen Sie eine Zahl zwischen 0 und 14."
             press_enter_to_continue
             ;;
     esac
