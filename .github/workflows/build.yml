@@ -67,6 +67,8 @@ jobs:
         run: |
           cd backend
           mkdir -p config bin pkg
+          mkdir -p cmd/server
+          cp -r cmd/kormit/* cmd/server/ || true
           if [ ! -f config/app.json ]; then
             echo '{
               "server": {
@@ -92,8 +94,14 @@ jobs:
       - name: Build and Test Backend
         run: |
           cd backend
+          echo "Verzeichnisstruktur:"
+          ls -la
+          echo "cmd Verzeichnisstruktur:"
+          ls -la cmd/
+          echo "Running tests:"
           go test -v ./... || true
-          go build -o bin/kormit ./cmd/kormit
+          echo "Building binary:"
+          go build -v -o bin/kormit ./cmd/kormit
           
       - name: Frontend Setup and Dependencies
         run: |
