@@ -377,6 +377,7 @@ check_dependencies() {
         "docker:Docker ist erforderlich für die Container-Virtualisierung:install_docker"
         "docker-compose:Docker Compose oder das Plugin ist erforderlich für die Container-Orchestrierung:install_docker_compose"
         "curl:Curl ist für Downloads und API-Aufrufe erforderlich:install_curl"
+        "dialog:Dialog wird für eine verbesserte Benutzeroberfläche empfohlen:install_dialog"
     )
     
     local all_passed=true
@@ -591,6 +592,39 @@ install_curl() {
     fi
 }
 
+# Dialog-Tool installieren für bessere UI (wenn verfügbar)
+install_dialog() {
+    # Prüfen, ob Dialog bereits installiert ist
+    if command -v dialog &> /dev/null; then
+        return 0
+    fi
+    
+    log_info "Dialog wird installiert für eine verbesserte Benutzeroberfläche..."
+    
+    run_with_spinner "case $OS in
+        ubuntu|debian)
+            apt update && apt install -y dialog
+            ;;
+        centos|rhel|fedora)
+            yum install -y dialog
+            ;;
+        alpine)
+            apk add --no-cache dialog
+            ;;
+        *)
+            exit 1
+            ;;
+    esac" "Dialog wird installiert"
+    
+    if command -v dialog &> /dev/null; then
+        log_success "Dialog wurde erfolgreich installiert."
+        return 0
+    else
+        log_warning "Dialog konnte nicht installiert werden. Fallback auf Text-UI."
+        return 1
+    fi
+}
+
 # Funktionen für Repository-Management
 clone_repository() {
     print_header "Repository wird geklont"
@@ -710,12 +744,23 @@ install_kormit() {
     # Zeige Zusammenfassung und starte Installation
     show_installation_summary
     
-    # Frage nach Bestätigung
-    echo -e "\n${YELLOW}Möchten Sie mit der Installation fortfahren? (J/n)${RESET}"
-    read -rp "> " confirm
-    if [[ "$confirm" =~ ^[nN]$ ]]; then
-        log_warning "Installation wurde abgebrochen."
-        return 1
+    # Frage nach Bestätigung, entweder mit Dialog oder textbasiert
+    if command -v dialog &> /dev/null; then
+        if ! dialog --clear --backtitle "Kormit Management Tool v$KORMIT_MANAGER_VERSION" \
+              --title "Installation starten" \
+              --yesno "Möchten Sie mit der Installation fortfahren?" \
+              7 60; then
+            log_warning "Installation wurde abgebrochen."
+            return 1
+        fi
+        clear
+    else
+        echo -e "\n${YELLOW}Möchten Sie mit der Installation fortfahren? (J/n)${RESET}"
+        read -rp "> " confirm
+        if [[ "$confirm" =~ ^[nN]$ ]]; then
+            log_warning "Installation wurde abgebrochen."
+            return 1
+        fi
     fi
     
     # Standard-Installations-Skript ausführen
@@ -839,6 +884,227 @@ show_access_info() {
 }
 
 get_installation_params() {
+    # Dialog verwenden, wenn verfügbar
+    if command -v dialog &> /dev/null; then
+        # Dialog-basierte Eingabe
+        get_installation_params_dialog
+    else
+        # Textbasierte Eingabe
+        get_installation_params_text
+    fi
+    
+    return 0
+}
+
+# Dialog-basierte Parametereingabe
+get_installation_params_dialog() {
+    local BACKTITLE="Kormit Management Tool v$KORMIT_MANAGER_VERSION"
+    local TITLE="Installationsparameter"
+    
+    # Domain-Name mit Validierung
+    while true; do
+        local user_domain=$(dialog --clear --backtitle "$BACKTITLE" \
+                           --title "$TITLE" \
+                           --inputbox "Domain-Name oder IP-Adresse\n(z.B. example.com oder 192.168.1.10):" \
+                           10 60 "$DOMAIN_NAME" \
+                           2>&1 >/dev/tty)
+        
+        # Abbruch bei ESC oder Cancel
+        if [[ $? -ne 0 ]]; then
+            return 1
+        fi
+        
+        if [[ -n "$user_domain" ]]; then
+            # Prüfe, ob es ein gültiger Domainname oder eine IP ist
+            if [[ "$user_domain" =~ ^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$ ]] || [[ "$user_domain" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                DOMAIN_NAME="$user_domain"
+                break
+            else
+                dialog --clear --backtitle "$BACKTITLE" \
+                       --title "Fehler" \
+                       --msgbox "Ungültiger Domain-Name oder IP-Adresse. Bitte erneut eingeben." \
+                       7 60
+            fi
+        else
+            break
+        fi
+    done
+    
+    # HTTPS verwenden?
+    if dialog --clear --backtitle "$BACKTITLE" \
+              --title "$TITLE" \
+              --yesno "HTTPS verwenden?\n\nJa - HTTPS mit SSL/TLS aktivieren\nNein - Nur HTTP verwenden (einfachere Konfiguration)" \
+              10 60; then
+        USE_HTTPS=true
+        
+        # Überprüfe, ob OpenSSL installiert ist
+        if ! command -v openssl &> /dev/null; then
+            if dialog --clear --backtitle "$BACKTITLE" \
+                      --title "OpenSSL nicht gefunden" \
+                      --yesno "OpenSSL ist für HTTPS erforderlich, aber nicht installiert. Möchten Sie es jetzt installieren?" \
+                      7 60; then
+                install_openssl
+                
+                if ! command -v openssl &> /dev/null; then
+                    dialog --clear --backtitle "$BACKTITLE" \
+                           --title "Fehler" \
+                           --msgbox "OpenSSL konnte nicht installiert werden. Fallback auf HTTP-only." \
+                           7 60
+                    USE_HTTPS=false
+                fi
+            else
+                dialog --clear --backtitle "$BACKTITLE" \
+                       --title "HTTPS deaktiviert" \
+                       --msgbox "HTTPS wurde deaktiviert, da OpenSSL nicht installiert ist." \
+                       7 60
+                USE_HTTPS=false
+            fi
+        fi
+    else
+        USE_HTTPS=false
+    fi
+    
+    # HTTP-Port mit Validierung
+    while true; do
+        local user_http_port=$(dialog --clear --backtitle "$BACKTITLE" \
+                               --title "$TITLE" \
+                               --inputbox "HTTP-Port:" \
+                               10 60 "$HTTP_PORT" \
+                               2>&1 >/dev/tty)
+        
+        # Abbruch bei ESC oder Cancel
+        if [[ $? -ne 0 ]]; then
+            break  # Standardwert verwenden
+        fi
+        
+        if [[ -n "$user_http_port" ]]; then
+            # Prüfe, ob es sich um eine gültige Portnummer handelt
+            if [[ "$user_http_port" =~ ^[0-9]+$ ]] && [[ "$user_http_port" -ge 1 ]] && [[ "$user_http_port" -le 65535 ]]; then
+                # Prüfe, ob der Port bereits belegt ist
+                if check_port "$user_http_port"; then
+                    HTTP_PORT="$user_http_port"
+                    break
+                else
+                    dialog --clear --backtitle "$BACKTITLE" \
+                           --title "Fehler" \
+                           --msgbox "Port $user_http_port ist bereits belegt. Bitte wählen Sie einen anderen Port." \
+                           7 60
+                fi
+            else
+                dialog --clear --backtitle "$BACKTITLE" \
+                       --title "Fehler" \
+                       --msgbox "Ungültige Portnummer. Bitte geben Sie eine Zahl zwischen 1 und 65535 ein." \
+                       7 60
+            fi
+        else
+            break  # Standardwert verwenden
+        fi
+    done
+    
+    # Prüfe, ob der Standardport verfügbar ist
+    if ! check_port "$HTTP_PORT"; then
+        # Suche nach einem freien Port
+        for try_port in 8080 8000 8888 9000 3000; do
+            if check_port "$try_port"; then
+                dialog --clear --backtitle "$BACKTITLE" \
+                       --title "Port geändert" \
+                       --msgbox "Der Standardport $HTTP_PORT ist bereits belegt.\nPort $try_port ist verfügbar und wird verwendet." \
+                       8 60
+                HTTP_PORT="$try_port"
+                break
+            fi
+        done
+    fi
+    
+    # HTTPS-Port (nur wenn HTTPS aktiviert ist)
+    if [[ "$USE_HTTPS" = true ]]; then
+        while true; do
+            local user_https_port=$(dialog --clear --backtitle "$BACKTITLE" \
+                                   --title "$TITLE" \
+                                   --inputbox "HTTPS-Port:" \
+                                   10 60 "$HTTPS_PORT" \
+                                   2>&1 >/dev/tty)
+            
+            # Abbruch bei ESC oder Cancel
+            if [[ $? -ne 0 ]]; then
+                break  # Standardwert verwenden
+            fi
+            
+            if [[ -n "$user_https_port" ]]; then
+                # Prüfe, ob es sich um eine gültige Portnummer handelt
+                if [[ "$user_https_port" =~ ^[0-9]+$ ]] && [[ "$user_https_port" -ge 1 ]] && [[ "$user_https_port" -le 65535 ]]; then
+                    # Stelle sicher, dass HTTP- und HTTPS-Ports unterschiedlich sind
+                    if [[ "$user_https_port" = "$HTTP_PORT" ]]; then
+                        dialog --clear --backtitle "$BACKTITLE" \
+                               --title "Fehler" \
+                               --msgbox "HTTPS-Port und HTTP-Port dürfen nicht identisch sein." \
+                               7 60
+                    elif check_port "$user_https_port"; then
+                        HTTPS_PORT="$user_https_port"
+                        break
+                    else
+                        dialog --clear --backtitle "$BACKTITLE" \
+                               --title "Fehler" \
+                               --msgbox "Port $user_https_port ist bereits belegt. Bitte wählen Sie einen anderen Port." \
+                               7 60
+                    fi
+                else
+                    dialog --clear --backtitle "$BACKTITLE" \
+                           --title "Fehler" \
+                           --msgbox "Ungültige Portnummer. Bitte geben Sie eine Zahl zwischen 1 und 65535 ein." \
+                           7 60
+                fi
+            else
+                break  # Standardwert verwenden
+            fi
+        done
+        
+        # Prüfe, ob der Standardport verfügbar ist
+        if ! check_port "$HTTPS_PORT"; then
+            # Suche nach einem freien Port
+            for try_port in 8443 4443 9443 10443; do
+                if check_port "$try_port"; then
+                    dialog --clear --backtitle "$BACKTITLE" \
+                           --title "Port geändert" \
+                           --msgbox "Der Standardport $HTTPS_PORT ist bereits belegt.\nPort $try_port ist verfügbar und wird verwendet." \
+                           8 60
+                    HTTPS_PORT="$try_port"
+                    break
+                fi
+            done
+        fi
+    fi
+    
+    # Frage nach erweiterten Optionen
+    if dialog --clear --backtitle "$BACKTITLE" \
+              --title "$TITLE" \
+              --yesno "Möchten Sie erweiterte Installationsoptionen konfigurieren?" \
+              7 60; then
+        configure_advanced_options_dialog
+    fi
+    
+    # Zeige Zusammenfassung
+    local SUMMARY="Domain: $DOMAIN_NAME\n"
+    SUMMARY+="HTTP-Port: $HTTP_PORT\n"
+    
+    if [[ "$USE_HTTPS" = true ]]; then
+        SUMMARY+="HTTPS-Port: $HTTPS_PORT\n"
+        SUMMARY+="HTTPS: Aktiviert"
+    else
+        SUMMARY+="HTTPS: Deaktiviert"
+    fi
+    
+    dialog --clear --backtitle "$BACKTITLE" \
+           --title "Zusammenfassung" \
+           --msgbox "$SUMMARY" \
+           10 60
+    
+    # Dialog schließen
+    clear
+}
+
+# Textbasierte Parametereingabe (alte Methode)
+get_installation_params_text() {
     echo -e "\n${CYAN}${BOLD}Installationsparameter konfigurieren:${RESET}"
     echo -e "${DIM}Drücken Sie einfach Enter, um die Standardwerte zu verwenden.${RESET}"
     
@@ -969,8 +1235,6 @@ get_installation_params() {
     if [[ "$advanced_choice" =~ ^[jJ]$ ]]; then
         configure_advanced_options
     fi
-    
-    return 0
 }
 
 # Funktion zur Installation von OpenSSL
@@ -993,7 +1257,7 @@ install_openssl() {
     esac" "OpenSSL wird installiert"
 }
 
-# Funktion zur Konfiguration erweiterter Installationsoptionen
+# Funktion zur Konfiguration erweiterter Installationsoptionen (textbasiert)
 configure_advanced_options() {
     print_header "Erweiterte Installationsoptionen"
     
@@ -1025,6 +1289,86 @@ configure_advanced_options() {
     else
         TIMEZONE="UTC"
     fi
+}
+
+# Dialog-basierte Konfiguration erweiterter Installationsoptionen
+configure_advanced_options_dialog() {
+    local BACKTITLE="Kormit Management Tool v$KORMIT_MANAGER_VERSION"
+    local TITLE="Erweiterte Installationsoptionen"
+    
+    # Speicherbegrenzung für Docker-Container
+    local memory_limit=$(dialog --clear --backtitle "$BACKTITLE" \
+                      --title "$TITLE" \
+                      --inputbox "Speicherbegrenzung für Container\n(leer für keine Begrenzung, z.B. 1g, 512m):" \
+                      10 60 \
+                      2>&1 >/dev/tty)
+    
+    if [[ -n "$memory_limit" ]]; then
+        MEMORY_LIMIT="$memory_limit"
+    fi
+    
+    # Datenbank-Passwort manuell festlegen
+    local db_password=$(dialog --clear --backtitle "$BACKTITLE" \
+                      --title "$TITLE" \
+                      --insecure --passwordbox "Benutzerdefiniertes Datenbank-Passwort\n(leer für automatisch generiertes Passwort):" \
+                      10 60 \
+                      2>&1 >/dev/tty)
+    
+    if [[ -n "$db_password" ]]; then
+        DB_PASSWORD="$db_password"
+    fi
+    
+    # Liste von gängigen Zeitzonen erstellen
+    local TIMEZONES=(
+        "UTC" "Koordinierte Weltzeit"
+        "Europe/Berlin" "Deutschland"
+        "Europe/Vienna" "Österreich"
+        "Europe/Zurich" "Schweiz"
+        "Europe/London" "Großbritannien"
+        "Europe/Paris" "Frankreich"
+        "America/New_York" "USA (Ostküste)"
+        "America/Los_Angeles" "USA (Westküste)"
+        "Australia/Sydney" "Australien (Sydney)"
+        "Asia/Tokyo" "Japan"
+    )
+    
+    # Zeitzone mit Menü auswählen
+    local timezone=$(dialog --clear --backtitle "$BACKTITLE" \
+                   --title "$TITLE" \
+                   --menu "Wählen Sie eine Zeitzone:" \
+                   15 60 10 \
+                   "${TIMEZONES[@]}" \
+                   2>&1 >/dev/tty)
+    
+    if [[ -n "$timezone" ]]; then
+        TIMEZONE="$timezone"
+    else
+        TIMEZONE="UTC"
+    fi
+    
+    # Zusammenfassung anzeigen
+    local SUMMARY="Die folgenden erweiterten Einstellungen wurden konfiguriert:\n\n"
+    
+    if [[ -n "$MEMORY_LIMIT" ]]; then
+        SUMMARY+="Container-Speicherbegrenzung: $MEMORY_LIMIT\n"
+    else
+        SUMMARY+="Container-Speicherbegrenzung: Keine\n"
+    fi
+    
+    if [[ -n "$DB_PASSWORD" ]]; then
+        SUMMARY+="Datenbank-Passwort: Benutzerdefiniert\n"
+    else
+        SUMMARY+="Datenbank-Passwort: Automatisch generiert\n"
+    fi
+    
+    SUMMARY+="Zeitzone: $TIMEZONE"
+    
+    dialog --clear --backtitle "$BACKTITLE" \
+           --title "Erweiterte Einstellungen" \
+           --msgbox "$SUMMARY" \
+           10 60
+    
+    clear
 }
 
 # Funktion zum Überprüfen, ob ein Port frei ist
@@ -1792,24 +2136,6 @@ show_menu() {
             ;;
         p|P)
             change_install_path
-
-# Hauptfunktion
-main() {
-    # Lade gespeicherte Konfiguration
-    load_config
-    
-    # Root-Rechte prüfen
-    check_root
-    
-    # Betriebssystem erkennen
-    detect_os
-    
-    # Menü anzeigen
-    show_menu
-}
-
-# Skript starten
-main "$@"
             ;;
         0)
             clear
@@ -1833,6 +2159,12 @@ main "$@"
     
     # Zurück zum Hauptmenü
     show_menu
+}
+
+# Helper function to pause execution until user presses Enter
+press_enter_to_continue() {
+    echo -e "\n${YELLOW}Drücken Sie Enter, um fortzufahren...${RESET}"
+    read -r
 }
 
 # Verbesserte Reparaturmenüfunktion
@@ -2022,3 +2354,310 @@ backup_database() {
    
     return 0
 }
+
+# Funktion zur Vorbereitung einer Neuinstallation
+prepare_reinstall() {
+    print_header "Neuinstallation vorbereiten"
+    
+    echo -e "${RED}${BOLD}ACHTUNG! Diese Funktion wird alle Kormit-Daten löschen!${RESET}"
+    echo -e "${RED}Alle Container, Images, Volumes und Konfigurationsdaten werden entfernt.${RESET}"
+    echo -e "${RED}Diese Aktion kann nicht rückgängig gemacht werden!${RESET}"
+    
+    echo -e "\n${YELLOW}${BOLD}Möchten Sie wirklich fortfahren? (j/N)${RESET}"
+    read -rp "> " confirm
+    
+    if [[ ! "$confirm" =~ ^[jJ]$ ]]; then
+        log_warning "Aktion abgebrochen."
+        return 1
+    fi
+    
+    # Zweite Bestätigung für zusätzliche Sicherheit
+    echo -e "\n${RED}${BOLD}Dies ist Ihre letzte Chance abzubrechen.${RESET}"
+    echo -e "${RED}Bitte geben Sie 'LÖSCHEN' ein, um zu bestätigen:${RESET}"
+    read -rp "> " confirm_text
+    
+    if [[ "$confirm_text" != "LÖSCHEN" ]]; then
+        log_warning "Aktion abgebrochen."
+        return 1
+    fi
+    
+    log_info "Beginne mit der Bereinigung..."
+    
+    # 1. Container stoppen und entfernen
+    log_info "Stoppe und entferne Container..."
+    if [[ -d "$INSTALL_DIR/docker/production" ]]; then
+        cd "$INSTALL_DIR/docker/production" || {
+            log_error "Konnte nicht in das Verzeichnis $INSTALL_DIR/docker/production wechseln";
+            return 1;
+        }
+        
+        if [[ -f "docker-compose.yml" ]]; then
+            run_with_spinner "docker compose down -v --remove-orphans" "Container werden gestoppt und entfernt"
+        fi
+    fi
+    
+    # 2. Docker-Ressourcen bereinigen
+    log_info "Bereinige Docker-Ressourcen..."
+    
+    # Volumes mit kormit im Namen entfernen
+    run_with_spinner "docker volume ls --filter name=kormit -q | xargs -r docker volume rm" "Volumes werden entfernt"
+    
+    # Netzwerke mit kormit im Namen entfernen
+    run_with_spinner "docker network ls --filter name=kormit -q | xargs -r docker network rm" "Netzwerke werden entfernt"
+    
+    # Images entfernen
+    log_info "Möchten Sie auch die Docker-Images entfernen? (j/N)"
+    read -rp "> " remove_images
+    if [[ "$remove_images" =~ ^[jJ]$ ]]; then
+        run_with_spinner "docker images | grep -E 'kormit|ghcr.io/kormit-panel' | awk '{print \$3}' | xargs -r docker rmi -f" "Images werden entfernt"
+    fi
+    
+    # 3. Installationsverzeichnis bereinigen
+    log_info "Bereinige Installationsverzeichnis..."
+    
+    # Sichere Konfigurationsdateien, falls gewünscht
+    log_info "Möchten Sie die Konfigurationsdateien sichern? (J/n)"
+    read -rp "> " backup_config
+    if [[ ! "$backup_config" =~ ^[nN]$ ]]; then
+        BACKUP_DIR="$HOME/kormit-backup-$(date +%Y%m%d%H%M%S)"
+        mkdir -p "$BACKUP_DIR"
+        
+        if [[ -f "$INSTALL_DIR/docker/production/.env" ]]; then
+            cp "$INSTALL_DIR/docker/production/.env" "$BACKUP_DIR/"
+            log_success "Konfiguration gesichert in: $BACKUP_DIR"
+        fi
+    fi
+    
+    # Lösche das Installationsverzeichnis
+    run_with_spinner "rm -rf $INSTALL_DIR/*" "Installationsverzeichnis wird bereinigt"
+    
+    log_success "Neuinstallation vorbereitet."
+    log_info "Sie können jetzt Kormit neu installieren mit der Option '3) Kormit installieren'."
+    
+    return 0
+}
+
+# Dialog-basiertes Menü, falls Dialog installiert ist
+show_dialog_menu() {
+    local HEIGHT=20
+    local WIDTH=70
+    local CHOICE_HEIGHT=13
+    local BACKTITLE="Kormit Management Tool v$KORMIT_MANAGER_VERSION"
+    local TITLE="Hauptmenü"
+    local MENU="Wählen Sie eine Option:"
+    local OPTIONS=(
+        1 "Abhängigkeiten prüfen - Docker, Git, etc."
+        2 "Repository klonen/aktualisieren - Neueste Code-Version holen"
+        3 "Kormit installieren - Neue Installation durchführen"
+        4 "Kormit starten/stoppen - Dienst verwalten"
+        5 "Kormit neustarten - Dienst neu starten"
+        6 "Kormit aktualisieren - Auf neue Version aktualisieren"
+        7 "Logs anzeigen - Container-Logs einsehen"
+        8 "Status anzeigen - Aktuellen Dienststatus prüfen"
+        9 "Installation reparieren - Erweiterte Reparaturfunktionen"
+        d "Debug-Modus umschalten - Aktueller Status: $(is_enabled "$DEBUG")"
+        a "Animationen umschalten - Aktueller Status: $(is_enabled "$ANIMATION_ENABLED")"
+        u "Auto-Update-Check umschalten - Aktueller Status: $(is_enabled "$AUTO_UPDATE_CHECK")"
+        p "Installationspfad ändern - (aktuell: $INSTALL_DIR)"
+        0 "Beenden - Programm beenden"
+    )
+    
+    local CHOICE=$(dialog --clear \
+                    --backtitle "$BACKTITLE" \
+                    --title "$TITLE" \
+                    --menu "$MENU" \
+                    $HEIGHT $WIDTH $CHOICE_HEIGHT \
+                    "${OPTIONS[@]}" \
+                    2>&1 >/dev/tty)
+    
+    clear  # Dialog-Ausgabe löschen
+    
+    case $CHOICE in
+        1)
+            check_dependencies
+            press_enter_to_continue
+            ;;
+        2)
+            update_repository
+            press_enter_to_continue
+            ;;
+        3)
+            install_kormit
+            press_enter_to_continue
+            ;;
+        4)
+            local is_running=false
+            if [[ -d "$INSTALL_DIR/docker/production" ]] && [[ -f "$INSTALL_DIR/docker/production/.env" ]] && docker ps | grep -q "kormit-proxy"; then
+                is_running=true
+                stop_kormit
+            else
+                start_kormit
+            fi
+            press_enter_to_continue
+            ;;
+        5)
+            restart_kormit
+            press_enter_to_continue
+            ;;
+        6)
+            update_kormit
+            press_enter_to_continue
+            ;;
+        7)
+            show_logs
+            ;;
+        8)
+            check_status
+            press_enter_to_continue
+            ;;
+        9)
+            show_dialog_repair_menu
+            ;;
+        d)
+            toggle_debug
+            ;;
+        a)
+            toggle_animations
+            ;;
+        u)
+            toggle_auto_update
+            ;;
+        p)
+            # Installationspfad-Dialog anzeigen
+            local NEW_DIR=$(dialog --clear --backtitle "$BACKTITLE" \
+                           --title "Installationspfad ändern" \
+                           --inputbox "Aktueller Pfad: $INSTALL_DIR\n\nNeuer Pfad:" \
+                           10 60 "$INSTALL_DIR" \
+                           2>&1 >/dev/tty)
+            
+            if [[ -n "$NEW_DIR" ]]; then
+                INSTALL_DIR="$NEW_DIR"
+                log_success "Installationsverzeichnis geändert auf: ${BOLD}$INSTALL_DIR${RESET}"
+                save_config
+            fi
+            ;;
+        0)
+            clear
+            echo -e "${GREEN}${BOLD}"
+            echo "╔════════════════════════════════════════════════════════════════╗"
+            echo "║                                                                ║"
+            echo "║   Vielen Dank für die Nutzung des Kormit Control Centers!      ║"
+            echo "║                                                                ║"
+            echo "║   Besuchen Sie uns unter: https://github.com/kormit-panel      ║"
+            echo "║                                                                ║"
+            echo "╚════════════════════════════════════════════════════════════════╝"
+            echo -e "${RESET}"
+            sleep 1
+            exit 0
+            ;;
+        *)
+            # Bei Abbruch oder unerwarteter Eingabe (z.B. ESC-Taste)
+            exit 0
+            ;;
+    esac
+    
+    # Zurück zum Menü
+    show_dialog_menu
+}
+
+# Dialog-basiertes Reparaturmenü
+show_dialog_repair_menu() {
+    local HEIGHT=20
+    local WIDTH=70
+    local CHOICE_HEIGHT=9
+    local BACKTITLE="Kormit Management Tool v$KORMIT_MANAGER_VERSION"
+    local TITLE="Reparatur & Wartung"
+    local MENU="Wählen Sie eine Option:"
+    local OPTIONS=(
+        1 "Komplettüberprüfung - Vollständige Systemdiagnose"
+        2 "Management-Skripte reparieren - Start-, Stop- und Update-Skripte"
+        3 "Image-Tags korrigieren - Manifest-unknown-Fehler beheben"
+        4 "Container neustarten - Alle Container neu starten"
+        5 "Container-Images aktualisieren - Neueste Images beziehen"
+        6 "Nginx-Konfiguration reparieren - SSL/HTTP-Probleme beheben"
+        7 "Datenbank sichern - Backup der Kormit-Datenbank erstellen"
+        8 "Neuinstallation vorbereiten - Alle Daten löschen"
+        0 "Zurück - Zum Hauptmenü zurückkehren"
+    )
+    
+    local CHOICE=$(dialog --clear \
+                    --backtitle "$BACKTITLE" \
+                    --title "$TITLE" \
+                    --menu "$MENU" \
+                    $HEIGHT $WIDTH $CHOICE_HEIGHT \
+                    "${OPTIONS[@]}" \
+                    2>&1 >/dev/tty)
+    
+    clear  # Dialog-Ausgabe löschen
+    
+    case $CHOICE in
+        1)
+            run_diagnostics
+            press_enter_to_continue
+            ;;
+        2)
+            repair_scripts
+            press_enter_to_continue
+            ;;
+        3)
+            fix_image_tags
+            press_enter_to_continue
+            ;;
+        4)
+            restart_kormit
+            press_enter_to_continue
+            ;;
+        5)
+            pull_images
+            press_enter_to_continue
+            ;;
+        6)
+            fix_nginx_ssl
+            press_enter_to_continue
+            ;;
+        7)
+            backup_database
+            press_enter_to_continue
+            ;;
+        8)
+            prepare_reinstall
+            press_enter_to_continue
+            ;;
+        0|"")
+            # Zurück zum Hauptmenü
+            return
+            ;;
+    esac
+    
+    # Zurück zum Reparaturmenü
+    show_dialog_repair_menu
+}
+
+# Hauptfunktion
+main() {
+    # Lade gespeicherte Konfiguration
+    load_config
+    
+    # Root-Rechte prüfen
+    check_root
+    
+    # Betriebssystem erkennen
+    detect_os
+    
+    # Prüfen, ob Updates verfügbar sind, falls aktiviert
+    if [[ "$AUTO_UPDATE_CHECK" = true ]]; then
+        check_for_updates
+    fi
+    
+    # Prüfen, ob Dialog verfügbar ist
+    if command -v dialog &> /dev/null; then
+        # Dialog-basiertes Menü anzeigen
+        show_dialog_menu
+    else
+        # Textbasiertes Menü anzeigen
+        show_menu
+    fi
+}
+
+# Skript starten
+main "$@"
