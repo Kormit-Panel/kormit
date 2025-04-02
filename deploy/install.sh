@@ -3,8 +3,22 @@
 # Installiert die Kormit-Anwendung mit Docker Compose
 # Version 1.0.0
 
-# Fehlerbehandlung aktivieren
+# Fehlerbehandlung aktivieren mit detailliertem Logging
 set -eo pipefail
+
+# Fehlerbehandlungs-Funktionen
+handle_error() {
+    local line_num=$1
+    local error_code=$2
+    local last_command=$3
+    
+    echo -e "${RED}Fehler beim Ausführen des Skripts:${RESET}"
+    echo -e "${RED}Befehl '${last_command}' fehlgeschlagen mit Exit-Code ${error_code} in Zeile ${line_num}${RESET}"
+    echo -e "${YELLOW}Überprüfen Sie die Berechtigungen und Verfügbarkeit der benötigten Dateien${RESET}"
+}
+
+# Registriere die Fehlerbehandlungs-Funktion
+trap 'handle_error ${LINENO} $? "$BASH_COMMAND"' ERR
 
 # Farbdefinitionen
 GREEN='\033[0;32m'
@@ -103,17 +117,81 @@ find_and_copy_file() {
     local target_dir="$2"
     local description="$3"
     
+    # Debug-Ausgabe hinzufügen
+    echo -e "${CYAN}▶ Debug: Suche nach $file_name für $description${RESET}"
+    echo -e "${CYAN}▶ Debug: Zielverzeichnis ist $target_dir${RESET}"
+    echo -e "${CYAN}▶ Debug: Basis-Skriptpfad ist $(dirname "$0")${RESET}"
+    
+    # Prüfe, ob das Zielverzeichnis existiert
+    if [[ ! -d "$target_dir" ]]; then
+        echo -e "${YELLOW}▶ Debug: Zielverzeichnis existiert nicht, wird erstellt...${RESET}"
+        mkdir -p "$target_dir" || {
+            echo -e "${RED}Fehler: Konnte Zielverzeichnis $target_dir nicht erstellen.${RESET}"
+            return 1
+        }
+    fi
+    
     # Standardpfad prüfen
-    if [[ -f "$(dirname "$0")/docker/production/$file_name" ]]; then
-        cp "$(dirname "$0")/docker/production/$file_name" "$target_dir/"
-        return 0
+    local standard_path="$(dirname "$0")/docker/production/$file_name"
+    echo -e "${CYAN}▶ Debug: Prüfe Standardpfad: $standard_path${RESET}"
+    
+    if [[ -f "$standard_path" ]]; then
+        echo -e "${CYAN}▶ Debug: Datei im Standardpfad gefunden${RESET}"
+        if cp "$standard_path" "$target_dir/"; then
+            echo -e "${GREEN}✅ $description aus Standardpfad kopiert.${RESET}"
+            return 0
+        else
+            echo -e "${RED}Fehler: Konnte Datei nicht aus Standardpfad kopieren.${RESET}"
+        fi
     fi
     
     # Alternative Pfade suchen
     echo -e "${YELLOW}$description nicht im Standardpfad gefunden. Suche an alternativen Orten...${RESET}"
     
     # Suche nach der Datei
-    local found_files=($(find "$(dirname "$0")" -name "$file_name" | sort))
+    echo -e "${CYAN}▶ Debug: Starte Dateisuche in $(dirname "$0")${RESET}"
+    
+    # Verwende find mit Error-Handling
+    local find_result
+    find_result=$(find "$(dirname "$0")" -name "$file_name" 2>/dev/null || echo "")
+    
+    # Prüfe, ob find erfolgreich war
+    if [[ -z "$find_result" ]]; then
+        echo -e "${RED}Fehler: find-Befehl konnte nicht ausgeführt werden oder fand keine Ergebnisse.${RESET}"
+        echo -e "${YELLOW}▶ Debug: Versuche direkten Zugriff auf bekannte Speicherorte...${RESET}"
+        
+        # Versuche einige bekannte Speicherorte
+        local known_paths=(
+            "$(dirname "$0")/docker/$file_name"
+            "$(dirname "$0")/../docker/production/$file_name"
+            "$(dirname "$0")/../docker/$file_name"
+            "$(dirname "$0")/docker/development/$file_name"
+        )
+        
+        for path in "${known_paths[@]}"; do
+            echo -e "${CYAN}▶ Debug: Prüfe $path${RESET}"
+            if [[ -f "$path" ]]; then
+                echo -e "${CYAN}▶ Debug: Datei gefunden unter $path${RESET}"
+                if cp "$path" "$target_dir/"; then
+                    echo -e "${GREEN}✅ $description aus $path kopiert.${RESET}"
+                    return 0
+                else
+                    echo -e "${RED}Fehler: Konnte Datei nicht aus $path kopieren.${RESET}"
+                fi
+            fi
+        done
+        
+        echo -e "${RED}Fehler: $description konnte nicht gefunden werden.${RESET}"
+        return 1
+    fi
+    
+    # Konvertiere in Array
+    mapfile -t found_files < <(echo "$find_result" | sort)
+    
+    echo -e "${CYAN}▶ Debug: ${#found_files[@]} Dateien gefunden${RESET}"
+    for file in "${found_files[@]}"; do
+        echo -e "${CYAN}▶ Debug: Gefunden: $file${RESET}"
+    done
     
     if [[ ${#found_files[@]} -eq 0 ]]; then
         echo -e "${RED}Fehler: $description nicht gefunden.${RESET}"
@@ -123,16 +201,25 @@ find_and_copy_file() {
     # Verwende die erste gefundene Datei (bevorzuge production über development)
     for file in "${found_files[@]}"; do
         if [[ "$file" == *"/production/"* ]]; then
-            cp "$file" "$target_dir/"
-            echo -e "${GREEN}✅ $description aus $file kopiert.${RESET}"
-            return 0
+            echo -e "${CYAN}▶ Debug: Verwende production-Datei: $file${RESET}"
+            if cp "$file" "$target_dir/"; then
+                echo -e "${GREEN}✅ $description aus $file kopiert.${RESET}"
+                return 0
+            else
+                echo -e "${RED}Fehler: Konnte Datei nicht kopieren: $file${RESET}"
+            fi
         fi
     done
     
     # Wenn keine production-Version gefunden wurde, verwende die erste Datei
-    cp "${found_files[0]}" "$target_dir/"
-    echo -e "${YELLOW}⚠️ $description aus ${found_files[0]} kopiert (nicht aus /production/).${RESET}"
-    return 0
+    echo -e "${CYAN}▶ Debug: Keine production-Version gefunden, verwende erste Datei: ${found_files[0]}${RESET}"
+    if cp "${found_files[0]}" "$target_dir/"; then
+        echo -e "${YELLOW}⚠️ $description aus ${found_files[0]} kopiert (nicht aus /production/).${RESET}"
+        return 0
+    else
+        echo -e "${RED}Fehler: Konnte Datei nicht kopieren: ${found_files[0]}${RESET}"
+        return 1
+    fi
 }
 
 if ! find_and_copy_file "docker-compose.yml" "${INSTALL_DIR}/docker/production" "Docker-Compose-Konfiguration"; then

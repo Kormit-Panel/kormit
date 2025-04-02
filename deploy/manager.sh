@@ -867,6 +867,39 @@ install_kormit() {
     # Standard-Installations-Skript ausführen
     log_info "Kormit wird installiert..."
     
+    # Prüfe, ob die Installationsdatei existiert
+    if [[ ! -f "$TMP_DIR/deploy/install.sh" ]]; then
+        log_error "Installations-Skript nicht gefunden: $TMP_DIR/deploy/install.sh"
+        
+        # Kopiere die install.sh aus dem aktuellen Verzeichnis
+        if [[ -f "$(dirname "$0")/install.sh" ]]; then
+            log_info "Kopiere lokale install.sh in das temporäre Verzeichnis..."
+            mkdir -p "$TMP_DIR/deploy"
+            cp "$(dirname "$0")/install.sh" "$TMP_DIR/deploy/"
+            chmod +x "$TMP_DIR/deploy/install.sh"
+        else
+            log_error "Keine install.sh-Datei gefunden. Installation nicht möglich."
+            return 1
+        fi
+    fi
+    
+    # Kopiere die Konfigurationsdateien ins Installationsverzeichnis, wenn sie nicht im TMP_DIR gefunden wurden
+    log_info "Stelle sicher, dass Konfigurationsdateien verfügbar sind..."
+    
+    mkdir -p "$TMP_DIR/deploy/docker/production"
+    
+    # Kopiere docker-compose.yml, falls sie fehlt
+    if [[ ! -f "$TMP_DIR/deploy/docker/production/docker-compose.yml" ]] && [[ -f "$(dirname "$0")/docker/production/docker-compose.yml" ]]; then
+        log_info "Kopiere docker-compose.yml aus lokalem Verzeichnis..."
+        cp "$(dirname "$0")/docker/production/docker-compose.yml" "$TMP_DIR/deploy/docker/production/"
+    fi
+    
+    # Kopiere nginx.conf, falls sie fehlt
+    if [[ ! -f "$TMP_DIR/deploy/docker/production/nginx.conf" ]] && [[ -f "$(dirname "$0")/docker/production/nginx.conf" ]]; then
+        log_info "Kopiere nginx.conf aus lokalem Verzeichnis..."
+        cp "$(dirname "$0")/docker/production/nginx.conf" "$TMP_DIR/deploy/docker/production/"
+    fi
+    
     # Erstelle Befehlszeile
     local cmd="$TMP_DIR/deploy/install.sh --install-dir=$INSTALL_DIR --domain=$DOMAIN_NAME --http-port=$HTTP_PORT --https-port=$HTTPS_PORT"
     
@@ -884,10 +917,17 @@ install_kormit() {
     # Führe das Skript aus mit temporärer Fehlerprotokollierung
     log_info "Starte Installation. Dies kann einige Minuten dauern..."
     
-    local LOG_FILE="/tmp/kormit_install_$(date +%s).log"
+    local LOG_FILE="./kormit_install_$(date +%s).log"
+    echo -e "${CYAN}▶ Debug: Installations-Log wird gespeichert in: $LOG_FILE${RESET}"
+    
+    # Führe das Installationsskript aus und protokolliere die Ausgabe
     if ! $cmd > >(tee -a "$LOG_FILE") 2>&1; then
         log_error "Installation fehlgeschlagen. Überprüfen Sie die Fehlermeldungen."
         log_info "Fehlerprotokoll wurde gespeichert in: $LOG_FILE"
+        
+        # Zeige die letzten 10 Zeilen des Logs an
+        echo -e "\n${YELLOW}Die letzten Zeilen des Fehlerprotokolls:${RESET}"
+        tail -n 10 "$LOG_FILE"
         
         # Suche nach häufigen Fehlerursachen
         if grep -q "Permission denied" "$LOG_FILE"; then
