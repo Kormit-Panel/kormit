@@ -344,15 +344,51 @@ update_manager() {
     fi
 }
 
+# Prüfe die Betriebssystemumgebung
+detect_environment() {
+    # Prüfe auf WSL/Windows-Umgebung
+    if uname -r | grep -q "microsoft" || [ -f /proc/sys/fs/binfmt_misc/WSLInterop ]; then
+        OS_ENV="WSL"
+        log_info "Windows Subsystem für Linux (WSL) erkannt"
+    elif [ "$(uname)" = "Darwin" ]; then
+        OS_ENV="MacOS"
+        log_info "MacOS-Umgebung erkannt"
+    elif [ "$(uname)" = "Linux" ]; then
+        OS_ENV="Linux"
+        log_info "Linux-Umgebung erkannt"
+    else
+        OS_ENV="Unbekannt"
+        log_warning "Unbekannte Betriebssystemumgebung"
+    fi
+}
+
 # Systemprüfung und Voraussetzungen
 detect_os() {
     run_with_spinner "sleep 1" "Betriebssystem wird erkannt"
+    
+    # Systemumgebung erkennen
+    detect_environment
     
     if [ -f /etc/os-release ]; then
         . /etc/os-release
         OS=$ID
         VERSION_ID=$VERSION_ID
         log_success "Erkanntes Betriebssystem: ${BOLD}$OS $VERSION_ID${RESET}"
+    elif [ "$OS_ENV" = "MacOS" ]; then
+        OS="macos"
+        VERSION_ID=$(sw_vers -productVersion)
+        log_success "Erkanntes Betriebssystem: ${BOLD}macOS $VERSION_ID${RESET}"
+    elif [ "$OS_ENV" = "WSL" ]; then
+        if [ -f /etc/os-release ]; then
+            . /etc/os-release
+            OS="wsl-$ID"
+            VERSION_ID=$VERSION_ID
+            log_success "Erkanntes Betriebssystem: ${BOLD}WSL - $ID $VERSION_ID${RESET}"
+        else
+            OS="wsl-unknown"
+            VERSION_ID="unknown"
+            log_warning "WSL erkannt, aber Distribution konnte nicht bestimmt werden"
+        fi
     else
         log_error "Betriebssystem konnte nicht erkannt werden."
         exit 1
@@ -1559,6 +1595,13 @@ EOL
     log_success "Nginx-Konfiguration wurde repariert."
 }
 
+# Verbesserte Tastaureingabe für Menüs
+read_menu_choice() {
+    echo -e "\nWählen Sie eine Option [0-9, d, a, u, p]:"
+    read choice
+    echo "$choice"
+}
+
 # Interaktives Menü
 show_menu() {
     clear
@@ -1585,7 +1628,14 @@ show_menu() {
     # Systeminfo anzeigen
     KERNEL_VERSION=$(uname -r)
     echo -e "\n${CYAN}${BOLD}⚙️ SYSTEM:${RESET}"
-    echo -e "  ${CYAN}${BOLD}●${RESET} Betriebssystem: ${GREEN}Linux ${KERNEL_VERSION}${RESET}"
+    
+    if [ "$OS_ENV" = "WSL" ]; then
+        echo -e "  ${CYAN}${BOLD}●${RESET} Betriebssystem: ${GREEN}Windows (WSL) - $KERNEL_VERSION${RESET}"
+    elif [ "$OS_ENV" = "MacOS" ]; then
+        echo -e "  ${CYAN}${BOLD}●${RESET} Betriebssystem: ${GREEN}macOS $(sw_vers -productVersion)${RESET}"
+    else
+        echo -e "  ${CYAN}${BOLD}●${RESET} Betriebssystem: ${GREEN}Linux $KERNEL_VERSION${RESET}"
+    fi
     
     # Statusanzeige
     echo -e "\n${CYAN}${BOLD}📡 STATUS:${RESET}"
@@ -1636,9 +1686,9 @@ show_menu() {
     
     # Weitere Optionen
     echo -e "${BOLD}⚙️ Weitere Optionen:${RESET}"
-    echo -e " ${GREEN}d${RESET}) ${BOLD}Debug-Modus${RESET} - ${is_enabled $DEBUG}"
-    echo -e " ${GREEN}a${RESET}) ${BOLD}Animationen${RESET} - ${is_enabled $ANIMATION_ENABLED}"
-    echo -e " ${GREEN}u${RESET}) ${BOLD}Auto-Update-Check${RESET} - ${is_enabled $AUTO_UPDATE_CHECK}"
+    echo -e " ${GREEN}d${RESET}) ${BOLD}Debug-Modus${RESET} - $(is_enabled "$DEBUG")"
+    echo -e " ${GREEN}a${RESET}) ${BOLD}Animationen${RESET} - $(is_enabled "$ANIMATION_ENABLED")"
+    echo -e " ${GREEN}u${RESET}) ${BOLD}Auto-Update-Check${RESET} - $(is_enabled "$AUTO_UPDATE_CHECK")"
     echo -e " ${GREEN}p${RESET}) ${BOLD}Installationspfad ändern${RESET} - (aktuell: ${CYAN}$INSTALL_DIR${RESET})"
     
     # Trennlinie
@@ -1651,12 +1701,17 @@ show_menu() {
     fi
     
     # Fußzeile
-    VERSION_INFO="${KORMIT_MANAGER_VERSION} (Linux)"
+    if [ "$OS_ENV" = "WSL" ]; then
+        VERSION_INFO="${KORMIT_MANAGER_VERSION} (Windows/WSL)"
+    elif [ "$OS_ENV" = "MacOS" ]; then
+        VERSION_INFO="${KORMIT_MANAGER_VERSION} (macOS)"
+    else
+        VERSION_INFO="${KORMIT_MANAGER_VERSION} (Linux)"
+    fi
     echo -e "\n${DIM}Kormit Control Center ${VERSION_INFO} | $(date '+%d.%m.%Y %H:%M')${RESET}"
     
-    echo -e "\nWählen Sie eine Option [0-9, d, a, u, p]:"
-    read -n 1 -r choice
-    echo
+    # Eingabeaufforderung mit verbesserter Robustheit
+    choice=$(read_menu_choice)
     
     case $choice in
         1)
@@ -1737,7 +1792,8 @@ show_menu() {
 
 # Hilfsfunktion für die Statusanzeige im Menü
 is_enabled() {
-    if [ "$1" = true ]; then
+    local status="$1"
+    if [ "$status" = "true" ]; then
         echo -e "${GREEN}Aktiviert${RESET}"
     else
         echo -e "${DIM}Deaktiviert${RESET}"
@@ -1761,8 +1817,7 @@ repair_menu() {
     echo -e " ${RED}0${RESET}) ${BOLD}Zurück${RESET} - Zum Hauptmenü zurückkehren"
     
     echo -e "\nWählen Sie eine Option [0-8]:"
-    read -n 1 -r repair_option
-    echo
+    read repair_option
     
     case $repair_option in
         1)
