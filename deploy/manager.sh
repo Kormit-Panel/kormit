@@ -50,7 +50,7 @@ HTTP_PORT="80"
 HTTPS_PORT="443"
 USE_HTTPS=false # Standard: HTTP-only für einfachere Installation
 DEBUG=false
-ANIMATION_ENABLED=true
+ANIMATION_ENABLED=false # Standard: Animationen deaktiviert
 AUTO_UPDATE_CHECK=true
 LAST_CHECK_TIME=0
 
@@ -92,60 +92,26 @@ check_root() {
 
 # Ausgabe-Funktionen
 print_logo() {
-    if [[ "$ANIMATION_ENABLED" = true ]]; then
-        clear
-        # Animiertes Logo mit mehr Sci-Fi-Elementen
-        echo -e "${CYAN}${BOLD}"
-        echo "╔════════════════════════════════════════════════════════════════╗"
-        echo "║                                                                ║"
-        sleep 0.05
-        echo "║   ██╗  ██╗ ██████╗ ██████╗ ███╗   ███╗██╗████████╗            ║"
-        sleep 0.05
-        echo "║   ██║ ██╔╝██╔═══██╗██╔══██╗████╗ ████║██║╚══██╔══╝            ║"
-        sleep 0.05
-        echo "║   █████╔╝ ██║   ██║██████╔╝██╔████╔██║██║   ██║               ║"
-        sleep 0.05
-        echo "║   ██╔═██╗ ██║   ██║██╔══██╗██║╚██╔╝██║██║   ██║               ║"
-        sleep 0.05
-        echo "║   ██║  ██╗╚██████╔╝██║  ██║██║ ╚═╝ ██║██║   ██║               ║"
-        sleep 0.05
-        echo "║   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝╚═╝   ╚═╝               ║"
-        sleep 0.05
-        echo "║                                                                ║"
-        echo "╠════════════════════════════════════════════════════════════════╣"
-        sleep 0.05
-        echo -e "║     ${GREEN}Kormit_Manager_Version:${CYAN} ${MAGENTA}$KORMIT_MANAGER_VERSION${CYAN}           ║"
-        echo "╠════════════════════════════════════════════════════════════════╣"
-        sleep 0.05
-        echo "║                                                                ║"
-        echo "║   ${MAGENTA}⚡ ${YELLOW}█▀▀ █▀█ █▄░█ ▀█▀ █▀█ █▀█ █░░   ${MAGENTA}█▀▀ █▀▀ █▄░█ ▀█▀ █▀▀ █▀█ ${CYAN} ║"
-        echo "║   ${MAGENTA}⚡ ${YELLOW}█▄▄ █▄█ █░▀█ ░█░ █▀▄ █▄█ █▄▄   ${MAGENTA}█▄▄ █▀░ █░▀█ ░█░ ██▄ █▀▄ ${CYAN} ║"
-        echo "║                                                                ║"
-        echo "╚════════════════════════════════════════════════════════════════╝"
-        echo -e "${RESET}"
-    else
-        # Statisches Logo für Server ohne Animation
-        clear
-        echo -e "${CYAN}${BOLD}"
-        echo "╔════════════════════════════════════════════════════════════════╗"
-        echo "║                                                                ║"
-        echo "║   ██╗  ██╗ ██████╗ ██████╗ ███╗   ███╗██╗████████╗            ║"
-        echo "║   ██║ ██╔╝██╔═══██╗██╔══██╗████╗ ████║██║╚══██╔══╝            ║"
-        echo "║   █████╔╝ ██║   ██║██████╔╝██╔████╔██║██║   ██║               ║"
-        echo "║   ██╔═██╗ ██║   ██║██╔══██╗██║╚██╔╝██║██║   ██║               ║"
-        echo "║   ██║  ██╗╚██████╔╝██║  ██║██║ ╚═╝ ██║██║   ██║               ║"
-        echo "║   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝╚═╝   ╚═╝               ║"
-        echo "║                                                                ║"
-        echo "╠════════════════════════════════════════════════════════════════╣"
-        echo -e "║     ${GREEN}Kormit_Manager_Version:${CYAN} ${MAGENTA}$KORMIT_MANAGER_VERSION${CYAN}           ║"
-        echo "╠════════════════════════════════════════════════════════════════╣"
-        echo "║                                                                ║"
-        echo "║   ${MAGENTA}⚡ ${YELLOW}█▀▀ █▀█ █▄░█ ▀█▀ █▀█ █▀█ █░░   ${MAGENTA}█▀▀ █▀▀ █▄░█ ▀█▀ █▀▀ █▀█ ${CYAN} ║"
-        echo "║   ${MAGENTA}⚡ ${YELLOW}█▄▄ █▄█ █░▀█ ░█░ █▀▄ █▄█ █▄▄   ${MAGENTA}█▄▄ █▀░ █░▀█ ░█░ ██▄ █▀▄ ${CYAN} ║"
-        echo "║                                                                ║"
-        echo "╚════════════════════════════════════════════════════════════════╝"
-        echo -e "${RESET}"
-    fi
+    # Statisches Logo
+    clear
+    echo -e "${CYAN}${BOLD}"
+    echo "╔════════════════════════════════════════════════════════════════╗"
+    echo "║                                                                ║"
+    echo "║   ██╗  ██╗ ██████╗ ██████╗ ███╗   ███╗██╗████████╗            ║"
+    echo "║   ██║ ██╔╝██╔═══██╗██╔══██╗████╗ ████║██║╚══██╔══╝            ║"
+    echo "║   █████╔╝ ██║   ██║██████╔╝██╔████╔██║██║   ██║               ║"
+    echo "║   ██╔═██╗ ██║   ██║██╔══██╗██║╚██╔╝██║██║   ██║               ║"
+    echo "║   ██║  ██╗╚██████╔╝██║  ██║██║ ╚═╝ ██║██║   ██║               ║"
+    echo "║   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝╚═╝   ╚═╝               ║"
+    echo "║                                                                ║"
+    echo "╠════════════════════════════════════════════════════════════════╣"
+    echo -e "║     ${GREEN}Kormit Manager Version:${RESET} ${MAGENTA}$KORMIT_MANAGER_VERSION${CYAN}                    ║"
+    echo "╠════════════════════════════════════════════════════════════════╣"
+    echo "║                                                                ║"
+    echo -e "║   ${MAGENTA}⚡ ${YELLOW}CONTROL CENTER${CYAN}                                           ║"
+    echo "║                                                                ║"
+    echo "╚════════════════════════════════════════════════════════════════╝"
+    echo -e "${RESET}"
 }
 
 print_header() {
@@ -767,7 +733,7 @@ install_kormit() {
     log_debug "Ausführen: $cmd"
     
     # Mache das Skript ausführbar
-        chmod +x "$TMP_DIR/deploy/install.sh"
+    chmod +x "$TMP_DIR/deploy/install.sh"
         
     # Führe das Skript aus
     if ! $cmd; then
@@ -783,11 +749,11 @@ install_kormit() {
         return 1
     fi
     
-            log_success "Kormit wurde erfolgreich installiert."
-            
-            # Nach der Installation die Image-Tags korrigieren
-            log_info "Korrigiere Image-Tags in der .env-Datei..."
-            fix_image_tags
+    log_success "Kormit wurde erfolgreich installiert."
+    
+    # Nach der Installation die Image-Tags korrigieren
+    log_info "Korrigiere Image-Tags in der .env-Datei..."
+    fix_image_tags
     
     # Zeige Zugriffsinformationen
     show_access_info
@@ -1168,7 +1134,7 @@ run_diagnostics() {
     echo -e "1. Stellen Sie sicher, dass Docker aktiv ist: ${CYAN}systemctl start docker${RESET}"
     echo -e "2. Prüfen Sie, ob die Ports frei sind: ${CYAN}netstat -tuln | grep $HTTP_PORT${RESET}"
     echo -e "3. Überprüfen Sie den Speicherplatz: ${CYAN}df -h${RESET}"
-    echo -e "4. Versuchen Sie die Reparaturoptionen: ${CYAN}sudo $0${RESET} → Option ${CYAN}10${RESET}"
+    echo -e "4. Versuchen Sie die Reparaturoptionen: ${CYAN}sudo $0${RESET} → Option ${CYAN}9${RESET}"
     echo -e "5. Bei anhaltenden Problemen: Besuchen Sie ${CYAN}https://github.com/kormit-panel/kormit/issues${RESET}"
 }
 
@@ -1245,7 +1211,16 @@ show_logs() {
             log_error "Konnte nicht in das Verzeichnis $INSTALL_DIR/docker/production wechseln";
             return 1;
         }
-        docker compose logs | less
+        
+        # Prüfen, ob docker-compose oder docker compose verfügbar ist
+        if command -v docker-compose &> /dev/null; then
+            docker-compose logs | less
+        elif docker compose version &> /dev/null; then
+            docker compose logs | less
+        else
+            log_error "Weder docker-compose noch docker compose Plugin sind verfügbar."
+            log_info "Bitte installieren Sie Docker Compose und versuchen Sie es erneut."
+        fi
     else
         log_error "Kormit-Verzeichnis konnte nicht gefunden werden: $INSTALL_DIR/docker/production"
         log_info "Ist Kormit installiert? Versuchen Sie zuerst 'Kormit installieren'."
@@ -1260,7 +1235,16 @@ check_status() {
             log_error "Konnte nicht in das Verzeichnis $INSTALL_DIR/docker/production wechseln";
             return 1;
         }
-        docker compose ps
+        
+        # Prüfen, ob docker-compose oder docker compose verfügbar ist
+        if command -v docker-compose &> /dev/null; then
+            docker-compose ps
+        elif docker compose version &> /dev/null; then
+            docker compose ps
+        else
+            log_error "Weder docker-compose noch docker compose Plugin sind verfügbar."
+            log_info "Bitte installieren Sie Docker Compose und versuchen Sie es erneut."
+        fi
     else
         log_error "Kormit-Verzeichnis konnte nicht gefunden werden: $INSTALL_DIR/docker/production"
         log_info "Ist Kormit installiert? Versuchen Sie zuerst 'Kormit installieren'."
@@ -1637,12 +1621,11 @@ is_enabled() {
     fi
 }
 
-# Verbesserte Tastaureingabe für Menüs
+# Verbesserte Tastatureingabe für Menüs
 read_menu_choice() {
     echo -e "\nWählen Sie eine Option [0-9, d, a, u, p]:"
     read -rp "> " choice
     echo "$choice"
-    # Keine Rückgabe - direkt im globalen Bereich verwenden
 }
 
 # Interaktives Menü
@@ -1694,7 +1677,7 @@ show_menu() {
     
     # Hauptmenü
     echo -e "\n${CYAN}${BOLD}🔷 HAUPTMENÜ${RESET}"
-    echo -e "${CYAN}$(printf '═%.0s' {1..60})${RESET}"
+    echo -e "${CYAN}══════════════════════════════════════════════════════════${RESET}"
     
     # Setup-Bereich
     echo -e "${BOLD}🔧 Setup:${RESET}"
@@ -1703,7 +1686,7 @@ show_menu() {
     echo -e " ${GREEN}3${RESET}) ${BOLD}Kormit installieren${RESET} - Neue Installation durchführen"
     
     # Trennlinie
-    echo -e "${CYAN}$(printf '─%.0s' {1..60})${RESET}"
+    echo -e "${CYAN}──────────────────────────────────────────────────────────${RESET}"
     
     # Service-Bereich mit Status-Symbolen
     echo -e "${BOLD}🚀 Verwaltung:${RESET}"
@@ -1716,7 +1699,7 @@ show_menu() {
     echo -e " ${GREEN}6${RESET}) ${BOLD}Kormit aktualisieren${RESET} - Auf neue Version aktualisieren"
     
     # Trennlinie
-    echo -e "${CYAN}$(printf '─%.0s' {1..60})${RESET}"
+    echo -e "${CYAN}──────────────────────────────────────────────────────────${RESET}"
     
     # Monitoring- und Wartungsbereich
     echo -e "${BOLD}📊 Monitoring & Wartung:${RESET}"
@@ -1725,7 +1708,7 @@ show_menu() {
     echo -e " ${GREEN}9${RESET}) ${BOLD}Installation reparieren${RESET} - Erweiterte Reparaturfunktionen"
     
     # Trennlinie
-    echo -e "${CYAN}$(printf '─%.0s' {1..60})${RESET}"
+    echo -e "${CYAN}──────────────────────────────────────────────────────────${RESET}"
     
     # Weitere Optionen
     echo -e "${BOLD}⚙️ Weitere Optionen:${RESET}"
@@ -1735,7 +1718,7 @@ show_menu() {
     echo -e " ${GREEN}p${RESET}) ${BOLD}Installationspfad ändern${RESET} - (aktuell: ${CYAN}$INSTALL_DIR${RESET})"
     
     # Trennlinie
-    echo -e "${CYAN}$(printf '─%.0s' {1..60})${RESET}"
+    echo -e "${CYAN}──────────────────────────────────────────────────────────${RESET}"
     echo -e " ${RED}0${RESET}) ${RED}${BOLD}Beenden${RESET} - Programm beenden"
     
     # Schnellzugriff für laufende Instanz
@@ -1753,8 +1736,7 @@ show_menu() {
     fi
     echo -e "\n${DIM}Kormit Control Center ${VERSION_INFO} | $(date '+%d.%m.%Y %H:%M')${RESET}"
     
-    # Eingabeaufforderung mit verbesserter Robustheit
-    # Direkte Eingabe ohne Funktionsaufruf für bessere Kompatibilität
+    # Eingabeaufforderung 
     echo -e "\nWählen Sie eine Option [0-9, d, a, u, p]:"
     read -rp "> " choice
     
@@ -1810,6 +1792,24 @@ show_menu() {
             ;;
         p|P)
             change_install_path
+
+# Hauptfunktion
+main() {
+    # Lade gespeicherte Konfiguration
+    load_config
+    
+    # Root-Rechte prüfen
+    check_root
+    
+    # Betriebssystem erkennen
+    detect_os
+    
+    # Menü anzeigen
+    show_menu
+}
+
+# Skript starten
+main "$@"
             ;;
         0)
             clear
@@ -1954,47 +1954,57 @@ change_install_path() {
 # Unterstützung für Datenbank-Backups
 backup_database() {
     print_header "Datenbank-Backup"
-    
+   
     # Prüfen, ob Kormit installiert ist
     if [[ ! -d "$INSTALL_DIR/docker/production" ]]; then
         log_error "Kormit scheint nicht installiert zu sein. Nichts zu sichern."
         return 1
     fi
-    
+   
     # Backup-Verzeichnis erstellen
     BACKUP_DIR="$INSTALL_DIR/backups"
     mkdir -p "$BACKUP_DIR"
-    
+   
     # Aktuelles Datum für den Dateinamen
     BACKUP_DATE=$(date +"%Y-%m-%d_%H-%M-%S")
     BACKUP_FILE="$BACKUP_DIR/kormit_db_$BACKUP_DATE.sql"
-    
+   
     log_info "Erstelle Backup der Kormit-Datenbank..."
-    
+   
     # Prüfen, ob der Container läuft
     if ! docker ps | grep -q "kormit-db"; then
         log_warning "Datenbank-Container läuft nicht. Starte Container für das Backup..."
-        cd "$INSTALL_DIR/docker/production" || { 
-            log_error "Konnte nicht in das Verzeichnis $INSTALL_DIR/docker/production wechseln"; 
-            return 1; 
+        cd "$INSTALL_DIR/docker/production" || {
+            log_error "Konnte nicht in das Verzeichnis $INSTALL_DIR/docker/production wechseln";
+            return 1;
         }
-        docker compose up -d kormit-db
+       
+        # Prüfen, ob docker-compose oder docker compose verfügbar ist
+        if command -v docker-compose &> /dev/null; then
+            docker-compose up -d kormit-db
+        elif docker compose version &> /dev/null; then
+            docker compose up -d kormit-db
+        else
+            log_error "Weder docker-compose noch docker compose Plugin sind verfügbar."
+            return 1
+        fi
+       
         # Warte, bis der Container bereit ist
         sleep 10
     fi
-    
+   
     # Database Dump durchführen
-    cd "$INSTALL_DIR/docker/production" || { 
-        log_error "Konnte nicht in das Verzeichnis $INSTALL_DIR/docker/production wechseln"; 
-        return 1; 
+    cd "$INSTALL_DIR/docker/production" || {
+        log_error "Konnte nicht in das Verzeichnis $INSTALL_DIR/docker/production wechseln";
+        return 1;
     }
-    
+   
     if run_with_spinner "
         export PGPASSWORD=\$(grep DB_PASSWORD .env | cut -d'=' -f2)
         docker exec kormit-db pg_dump -U \$(grep DB_USER .env | cut -d'=' -f2) \$(grep DB_NAME .env | cut -d'=' -f2) > \"$BACKUP_FILE\"
     " "Datenbank wird gesichert"; then
         log_success "Datenbank wurde erfolgreich gesichert: $BACKUP_FILE"
-        
+       
         # Komprimiere die Backup-Datei
         if command -v gzip &> /dev/null; then
             run_with_spinner "gzip -f \"$BACKUP_FILE\"" "Backup wird komprimiert"
@@ -2005,76 +2015,10 @@ backup_database() {
         log_error "Fehler beim Sichern der Datenbank."
         return 1
     fi
-    
+   
     # Größe des Backups anzeigen
     BACKUP_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
     log_info "Backup-Größe: $BACKUP_SIZE"
-    
+   
     return 0
 }
-
-# Vorbereitung für eine Neuinstallation
-prepare_reinstall() {
-    print_header "Neuinstallation vorbereiten"
-    
-    echo -e "${RED}${BOLD}WARNUNG: Diese Aktion wird alle Kormit-Daten entfernen!${RESET}"
-    echo -e "${RED}Alle Container, Volumes und Konfigurationsdateien werden gelöscht.${RESET}"
-    echo -e "\nMöchten Sie vorher ein Backup erstellen? (J/n):"
-    read -rp "> " create_backup
-    
-    if [[ ! "$create_backup" =~ ^[nN]$ ]]; then
-        backup_database
-    fi
-    
-    echo -e "\n${RED}${BOLD}LETZTE WARNUNG:${RESET} Alle Daten werden unwiderruflich gelöscht."
-    echo -e "Bitte geben Sie ${RED}\"LÖSCHEN\"${RESET} ein, um zu bestätigen:"
-    read -rp "> " confirmation
-    
-    if [[ "$confirmation" != "LÖSCHEN" ]]; then
-        log_warning "Aktion abgebrochen. Nichts wurde gelöscht."
-        return
-    fi
-    
-    # Stoppe und entferne Container
-    if [[ -d "$INSTALL_DIR/docker/production" ]]; then
-        log_info "Stoppe und entferne Container..."
-        cd "$INSTALL_DIR/docker/production" || { 
-            log_error "Konnte nicht in das Verzeichnis $INSTALL_DIR/docker/production wechseln"; 
-            return 1; 
-        }
-        run_with_spinner "docker compose down -v" "Container werden gestoppt und entfernt"
-    fi
-    
-    # Lösche alle Docker-Volumes mit dem Kormit-Präfix
-    log_info "Lösche Docker Volumes..."
-    run_with_spinner "docker volume rm $(docker volume ls -q | grep kormit 2>/dev/null) 2>/dev/null || true" "Volumes werden gelöscht"
-    
-    # Lösche das Installationsverzeichnis
-    log_info "Lösche Installationsverzeichnis..."
-    run_with_spinner "rm -rf \"$INSTALL_DIR\"" "Installationsverzeichnis wird gelöscht"
-    
-    log_success "Alle Kormit-Daten wurden gelöscht. Das System ist bereit für eine Neuinstallation."
-}
-
-press_enter_to_continue() {
-    echo ""
-    read -rp "Drücken Sie [Enter], um fortzufahren..."
-}
-
-# Hauptfunktion
-main() {
-    # Lade gespeicherte Konfiguration
-    load_config
-    
-    # Root-Rechte prüfen
-    check_root
-    
-    # Betriebssystem erkennen
-    detect_os
-    
-    # Menü anzeigen
-    show_menu
-}
-
-# Skript starten
-main
