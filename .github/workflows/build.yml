@@ -68,7 +68,7 @@ jobs:
           cd backend
           mkdir -p config bin pkg
           mkdir -p cmd/server
-          cp -r cmd/kormit/* cmd/server/ || true
+          cp cmd/kormit/main.go cmd/server/main.go || true
           if [ ! -f config/app.json ]; then
             echo '{
               "server": {
@@ -98,10 +98,16 @@ jobs:
           ls -la
           echo "cmd Verzeichnisstruktur:"
           ls -la cmd/
+          echo "kormit Verzeichnisstruktur:"
+          ls -la cmd/kormit/
+          echo "server Verzeichnisstruktur:"
+          ls -la cmd/server/
           echo "Running tests:"
           go test -v ./... || true
-          echo "Building binary:"
+          echo "Building binary from kormit:"
           go build -v -o bin/kormit ./cmd/kormit
+          echo "Building binary from server as fallback (wenn nötig):"
+          go build -v -o bin/server ./cmd/server || true
           
       - name: Frontend Setup and Dependencies
         run: |
