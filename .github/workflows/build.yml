@@ -93,7 +93,7 @@ jobs:
         run: |
           cd backend
           go test -v ./... || true
-          go build -o bin/server ./cmd/server
+          go build -o bin/server ./cmd/kormit
           
       - name: Frontend Setup and Dependencies
         run: |
