@@ -1,7 +1,10 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Kormit Installer Setup Script
 # This script downloads and runs the Kormit Management Script
 # Version 1.2.1 - Mit korrigiertem interaktivem Menü
+
+# Strikte Fehlerbehandlung aktivieren
+set -eo pipefail
 
 # Farbdefinitionen für bessere Lesbarkeit
 RESET="\033[0m"
@@ -36,7 +39,7 @@ print_logo() {
 
 # Prüfen, ob das Skript als Root ausgeführt wird
 check_root() {
-    if [ "$(id -u)" -ne 0 ]; then
+    if [[ "$(id -u)" -ne 0 ]]; then
         echo -e "${RED}${BOLD}✘ Dieses Skript muss als Root ausgeführt werden.${RESET}"
         echo -e "${YELLOW}Bitte mit 'sudo' oder als Root-Benutzer ausführen, z.B.:${RESET}"
         echo -e "${BOLD}sudo curl -sSL https://github.com/Kormit-Panel/kormit/raw/refs/heads/main/deploy/kormit-setup.sh | sudo bash${RESET}"
@@ -71,8 +74,9 @@ install_kormit() {
         echo -e "${YELLOW}⚠️ Curl scheint nicht verfügbar zu sein. Versuche, es zu installieren...${RESET}"
         
         # Betriebssystem erkennen und curl installieren
-        if [ -f /etc/os-release ]; then
-            . /etc/os-release
+        if [[ -f /etc/os-release ]]; then
+            # shellcheck source=/dev/null
+            source /etc/os-release
             
             case $ID in
                 ubuntu|debian)
@@ -125,7 +129,7 @@ install_kormit() {
     echo -e "2) Benutzerdefiniertes Installationsverzeichnis"
     echo -e "3) Abbrechen"
 
-    read -p "Option wählen (1-3): " setup_option
+    read -rp "Option wählen (1-3): " setup_option
 
     case $setup_option in
         1)
@@ -136,8 +140,8 @@ install_kormit() {
             echo -e "\n${CYAN}▶ Benutzerdefinierte Installation...${RESET}"
             
             # Installationsverzeichnis
-            read -p "Installationsverzeichnis [$install_dir]: " custom_dir
-            if [ -n "$custom_dir" ]; then
+            read -rp "Installationsverzeichnis [$install_dir]: " custom_dir
+            if [[ -n "$custom_dir" ]]; then
                 adjusted_dir="$custom_dir"
             else
                 adjusted_dir="$install_dir"
@@ -184,7 +188,7 @@ install_kormit() {
     
     # Fragen, ob Kormit direkt gestartet werden soll
     echo -e "\n${YELLOW}Möchten Sie Kormit jetzt starten? (j/N)${RESET}"
-    read -p "> " start_now
+    read -rp "> " start_now
     
     if [[ "$start_now" =~ ^[jJ]$ ]]; then
         echo -e "${CYAN}▶ Starte Kormit...${RESET}"
@@ -201,7 +205,7 @@ uninstall_kormit() {
     local install_dir="$1"
     local purge="$2"
     
-    if [ "$purge" = true ]; then
+    if [[ "$purge" = true ]]; then
         echo -e "${RED}${BOLD}ACHTUNG: Sie sind dabei, Kormit vollständig zu entfernen!${RESET}"
         echo -e "${RED}Dies wird alle Container, Volumes und Konfigurationsdaten löschen.${RESET}"
     else
@@ -210,7 +214,7 @@ uninstall_kormit() {
     fi
     
     echo -e "Installationsverzeichnis: ${BOLD}$install_dir${RESET}"
-    read -p "Sind Sie sicher, dass Sie fortfahren möchten? (j/N): " confirm
+    read -rp "Sind Sie sicher, dass Sie fortfahren möchten? (j/N): " confirm
     
     if [[ ! "$confirm" =~ ^[jJ]$ ]]; then
         echo -e "${YELLOW}Deinstallation abgebrochen.${RESET}"
@@ -221,7 +225,7 @@ uninstall_kormit() {
     
     # Systemweiten Befehl entfernen
     echo -e "${YELLOW}→ Entferne systemweiten Befehl...${RESET}"
-    if [ -L "/usr/local/bin/kormit" ]; then
+    if [[ -L "/usr/local/bin/kormit" ]]; then
         rm -f "/usr/local/bin/kormit"
         echo -e "${GREEN}✓ Systemweiter Befehl wurde entfernt.${RESET}"
     else
@@ -229,19 +233,21 @@ uninstall_kormit() {
     fi
     
     # Stoppe Kormit, falls aktiv
-    if [ -f "$install_dir/stop.sh" ]; then
+    if [[ -f "$install_dir/stop.sh" ]]; then
         echo -e "${YELLOW}→ Stoppe Kormit-Dienste...${RESET}"
         "$install_dir/stop.sh" >/dev/null 2>&1 || true
     fi
     
     # Entferne Container und Images wenn PURGE aktiviert ist
-    if [ "$purge" = true ]; then
+    if [[ "$purge" = true ]]; then
         echo -e "${YELLOW}→ Bereinige Docker-Ressourcen...${RESET}"
         
         # Versuche, Docker-Compose-Datei zu finden und Container zu entfernen
-        if [ -d "$install_dir/docker/production" ]; then
-            cd "$install_dir/docker/production"
-            if [ -f "docker-compose.yml" ]; then
+        if [[ -d "$install_dir/docker/production" ]]; then
+            cd "$install_dir/docker/production" || { 
+                echo -e "${RED}! Konnte nicht in das Verzeichnis $install_dir/docker/production wechseln.${RESET}"; 
+            }
+            if [[ -f "docker-compose.yml" ]]; then
                 echo -e "${YELLOW}→ Entferne Container und Volumes...${RESET}"
                 docker compose down -v --remove-orphans >/dev/null 2>&1 || true
             fi
@@ -256,7 +262,7 @@ uninstall_kormit() {
         docker network rm kormit-network >/dev/null 2>&1 || true
         
         # Optional: Images entfernen?
-        read -p "Möchten Sie auch die Docker-Images entfernen? (j/N): " remove_images
+        read -rp "Möchten Sie auch die Docker-Images entfernen? (j/N): " remove_images
         if [[ "$remove_images" =~ ^[jJ]$ ]]; then
             echo -e "${YELLOW}→ Entferne Docker-Images...${RESET}"
             docker images | grep "kormit" | awk '{print $3}' | xargs -r docker rmi -f >/dev/null 2>&1 || true
@@ -268,7 +274,7 @@ uninstall_kormit() {
         echo -e "${GREEN}✓ Installationsverzeichnis wurde entfernt.${RESET}"
     else
         # Bei normaler Deinstallation nur das Manager-Skript entfernen
-        if [ -f "$install_dir/kormit-manager.sh" ]; then
+        if [[ -f "$install_dir/kormit-manager.sh" ]]; then
             echo -e "${YELLOW}→ Entferne Manager-Skript...${RESET}"
             rm -f "$install_dir/kormit-manager.sh"
             echo -e "${GREEN}✓ Manager-Skript wurde entfernt.${RESET}"
@@ -295,7 +301,7 @@ show_menu() {
     echo -e "0) ${BOLD}Beenden${RESET} - Programm beenden"
     echo ""
     echo -e "Wählen Sie eine Option (0-4):"
-    read -p "> " choice
+    read -rp "> " choice
     
     case $choice in
         1)
@@ -312,8 +318,8 @@ show_menu() {
             ;;
         4)
             echo -e "Aktuelles Installationsverzeichnis: ${BOLD}$INSTALL_DIR${RESET}"
-            read -p "Neues Installationsverzeichnis eingeben: " new_dir
-            if [ -n "$new_dir" ]; then
+            read -rp "Neues Installationsverzeichnis eingeben: " new_dir
+            if [[ -n "$new_dir" ]]; then
                 INSTALL_DIR="$new_dir"
                 echo -e "${GREEN}✅ Installationsverzeichnis geändert auf: ${BOLD}$INSTALL_DIR${RESET}"
             fi
@@ -331,7 +337,7 @@ show_menu() {
     
     # Nach Option 4 oder bei ungültiger Eingabe fragen wir, ob man zurück zum Menü will
     echo ""
-    read -p "Drücken Sie Enter, um fortzufahren oder 'q' zum Beenden: " continue_opt
+    read -rp "Drücken Sie Enter, um fortzufahren oder 'q' zum Beenden: " continue_opt
     if [[ "$continue_opt" =~ ^[qQ]$ ]]; then
         echo -e "${GREEN}Auf Wiedersehen!${RESET}"
         exit 0
@@ -350,14 +356,14 @@ main() {
     CUSTOM_DIR=""
     
     # Prüfen, ob Parameter vorhanden sind
-    if [ $# -gt 0 ]; then
+    if [[ $# -gt 0 ]]; then
         for i in "$@"; do
             case $i in
                 --help|-h)
                     show_help
                     ;;
                 --install)
-                    if [ -n "$CUSTOM_DIR" ]; then
+                    if [[ -n "$CUSTOM_DIR" ]]; then
                         install_kormit "$CUSTOM_DIR"
                     else
                         install_kormit "$DEFAULT_INSTALL_DIR"
@@ -382,8 +388,8 @@ main() {
         done
         
         # Wenn --uninstall oder --purge gesetzt ist, führe die Deinstallation durch
-        if [ "$UNINSTALL" = true ]; then
-            if [ -n "$CUSTOM_DIR" ]; then
+        if [[ "$UNINSTALL" = true ]]; then
+            if [[ -n "$CUSTOM_DIR" ]]; then
                 uninstall_kormit "$CUSTOM_DIR" "$PURGE"
             else
                 uninstall_kormit "$DEFAULT_INSTALL_DIR" "$PURGE"
@@ -396,7 +402,7 @@ main() {
             clear  # Bildschirm säubern vor jeder Anzeige
             show_menu
             # Wenn show_menu 0 zurückgibt, beenden wir die Schleife
-            if [ $? -eq 0 ]; then
+            if [[ $? -eq 0 ]]; then
                 break
             fi
         done

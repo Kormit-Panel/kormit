@@ -1,7 +1,10 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Kormit Quick-Fix-Skript
 # Behebt häufige Probleme mit der Kormit-Installation
 # Version 1.0.0
+
+# Fehlerbehandlung aktivieren
+set -eo pipefail
 
 # Farbdefinitionen
 GREEN='\033[0;32m'
@@ -15,7 +18,7 @@ RESET='\033[0m'
 INSTALL_DIR="/opt/kormit"
 
 # Prüfe, ob ein anderes Installationsverzeichnis angegeben wurde
-if [ "$1" != "" ]; then
+if [[ "$1" != "" ]]; then
     INSTALL_DIR="$1"
 fi
 
@@ -28,7 +31,7 @@ echo -e "${CYAN}▶ Installationsverzeichnis: ${RESET}${INSTALL_DIR}"
 echo -e "${CYAN}════════════════════════════════════════════════════════════════${RESET}"
 
 # Prüfe, ob das Installationsverzeichnis existiert
-if [ ! -d "$INSTALL_DIR" ]; then
+if [[ ! -d "$INSTALL_DIR" ]]; then
     echo -e "${RED}❌ Das Installationsverzeichnis existiert nicht.${RESET}"
     echo -e "${YELLOW}Bitte überprüfen Sie den Pfad oder installieren Sie Kormit.${RESET}"
     exit 1
@@ -45,7 +48,7 @@ touch "$INSTALL_DIR/docker/production/ssl/kormit.key"
 touch "$INSTALL_DIR/docker/production/ssl/kormit.crt"
 
 # Sicherungskopie der nginx.conf erstellen, falls noch nicht vorhanden
-if [ ! -f "$INSTALL_DIR/docker/production/nginx.conf.bak" ]; then
+if [[ ! -f "$INSTALL_DIR/docker/production/nginx.conf.bak" ]]; then
     cp "$INSTALL_DIR/docker/production/nginx.conf" "$INSTALL_DIR/docker/production/nginx.conf.bak"
     echo -e "${GREEN}✅ Sicherungskopie der Nginx-Konfiguration erstellt.${RESET}"
 fi
@@ -54,13 +57,13 @@ fi
 echo -e "${BLUE}▶ Nginx-Konfiguration wird auf HTTP-only umgestellt...${RESET}"
 
 # Neue HTTP-only Konfiguration
-cat > "$INSTALL_DIR/docker/production/nginx.conf" << EOL
+cat > "$INSTALL_DIR/docker/production/nginx.conf" << 'EOL'
 # Kormit Nginx Konfiguration
 # HTTP-only Version
 
-log_format kormit_log '\$remote_addr - \$remote_user [\$time_local] '
-                     '"\$request" \$status \$body_bytes_sent '
-                     '"\$http_referer" "\$http_user_agent" "\$http_x_forwarded_for"';
+log_format kormit_log '$remote_addr - $remote_user [$time_local] '
+                     '"$request" $status $body_bytes_sent '
+                     '"$http_referer" "$http_user_agent" "$http_x_forwarded_for"';
 
 # Upstream-Definitionen für Load Balancing
 upstream kormit_backend {
@@ -89,38 +92,38 @@ server {
     gzip_min_length 1000;
     
     # Cache-Header für statische Assets
-    location ~* \\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)\$ {
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
         expires 30d;
         add_header Cache-Control "public, max-age=2592000";
         access_log off;
         
         # Erst Frontend für statische Assets prüfen
         proxy_pass http://kormit_frontend;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
     
     # Frontend-Routing (Vue Router History Mode)
     location / {
         proxy_pass http://kormit_frontend;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         
         # Wichtig für Vue Router History Mode
-        try_files \$uri \$uri/ /index.html;
+        try_files $uri $uri/ /index.html;
     }
     
     # API-Anfragen zum Backend weiterleiten
     location /api/ {
         proxy_pass http://kormit_backend/api/;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         
         # CORS-Header hinzufügen
         add_header 'Access-Control-Allow-Origin' '*' always;
@@ -129,7 +132,7 @@ server {
         add_header 'Access-Control-Allow-Credentials' 'true' always;
         
         # Preflight-Anfragen behandeln
-        if (\$request_method = 'OPTIONS') {
+        if ($request_method = 'OPTIONS') {
             add_header 'Access-Control-Allow-Origin' '*' always;
             add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
             add_header 'Access-Control-Allow-Headers' 'Origin, X-Requested-With, Content-Type, Accept, Authorization' always;
@@ -150,12 +153,12 @@ server {
     location /ws {
         proxy_pass http://kormit_backend/ws;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
     
     # Gesundheitscheck-Endpunkt
@@ -172,7 +175,7 @@ echo -e "${GREEN}✅ Nginx-Konfiguration wurde auf HTTP-only umgestellt.${RESET}
 echo -e "${BLUE}▶ Docker-Compose-Konfiguration wird angepasst...${RESET}"
 
 # Sichere docker-compose.yml, falls nicht bereits gesichert
-if [ ! -f "$INSTALL_DIR/docker/production/docker-compose.yml.bak" ]; then
+if [[ ! -f "$INSTALL_DIR/docker/production/docker-compose.yml.bak" ]]; then
     cp "$INSTALL_DIR/docker/production/docker-compose.yml" "$INSTALL_DIR/docker/production/docker-compose.yml.bak"
     echo -e "${GREEN}✅ Sicherungskopie der Docker-Compose-Datei erstellt.${RESET}"
 fi
@@ -185,7 +188,10 @@ echo -e "${GREEN}✅ Docker-Compose-Konfiguration wurde angepasst.${RESET}"
 # 2. Container neustarten
 echo -e "${BLUE}▶ Container werden neugestartet...${RESET}"
 
-cd "$INSTALL_DIR/docker/production"
+cd "$INSTALL_DIR/docker/production" || {
+    echo -e "${RED}❌ Konnte nicht in das Verzeichnis $INSTALL_DIR/docker/production wechseln.${RESET}"
+    exit 1
+}
 
 # Stoppe und starte die Container neu
 docker compose down
@@ -195,7 +201,7 @@ echo -e "${GREEN}✅ Container wurden neugestartet.${RESET}"
 
 echo -e "${CYAN}════════════════════════════════════════════════════════════════${RESET}"
 echo -e "${GREEN}✅ Reparatur abgeschlossen!${RESET}"
-echo -e "${CYAN}▶ Überprüfen Sie den Status mit:${RESET} cd $INSTALL_DIR && docker compose ps"
+echo -e "${CYAN}▶ Überprüfen Sie den Status mit:${RESET} cd $INSTALL_DIR/docker/production && docker compose ps"
 echo -e "${CYAN}════════════════════════════════════════════════════════════════${RESET}"
 
-exit 0 
+exit 0

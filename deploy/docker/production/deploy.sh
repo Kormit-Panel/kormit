@@ -1,6 +1,9 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Kormit Deployment Tool
+# Version 1.0.0
 
-set -e
+# Fehlerbehandlung aktivieren
+set -eo pipefail
 
 # Farbdefinitionen
 GREEN='\033[0;32m'
@@ -25,9 +28,16 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-if ! command -v docker-compose &> /dev/null; then
+if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
     echo -e "${RED}✘ Docker Compose ist nicht installiert. Bitte installieren Sie Docker Compose und versuchen Sie es erneut.${NC}"
     exit 1
+fi
+
+# Docker Compose Befehl dynamisch bestimmen
+if command -v docker-compose &> /dev/null; then
+    DOCKER_COMPOSE="docker-compose"
+else
+    DOCKER_COMPOSE="docker compose"
 fi
 
 # Verzeichnisstruktur erstellen
@@ -38,7 +48,7 @@ BACKEND_TAR="kormit-backend.tar"
 FRONTEND_TAR="kormit-frontend.tar"
 
 # Überprüfen, ob Images als Dateien bereitgestellt werden
-if [ -f "$BACKEND_TAR" ]; then
+if [[ -f "$BACKEND_TAR" ]]; then
     echo -e "${YELLOW}→ Backend-Image-Datei gefunden. Lade...${NC}"
     docker load -i "$BACKEND_TAR"
     # Setze Umgebungsvariable auf den geladenen Image-Namen
@@ -54,7 +64,7 @@ else
     fi
 fi
 
-if [ -f "$FRONTEND_TAR" ]; then
+if [[ -f "$FRONTEND_TAR" ]]; then
     echo -e "${YELLOW}→ Frontend-Image-Datei gefunden. Lade...${NC}"
     docker load -i "$FRONTEND_TAR"
     # Setze Umgebungsvariable auf den geladenen Image-Namen
@@ -72,19 +82,19 @@ fi
 
 # Starten der Services
 echo -e "${BLUE}→ Starte Kormit-Services...${NC}"
-docker-compose down 2>/dev/null || true
-docker-compose up -d
+$DOCKER_COMPOSE down 2>/dev/null || true
+$DOCKER_COMPOSE up -d
 
 # Überprüfen, ob alles läuft
 echo -e "${YELLOW}→ Überprüfe Service-Status...${NC}"
 sleep 5
-if docker-compose ps | grep -q "Exit"; then
+if $DOCKER_COMPOSE ps | grep -q "Exit"; then
     echo -e "${RED}✘ Einige Services konnten nicht gestartet werden:${NC}"
-    docker-compose ps
+    $DOCKER_COMPOSE ps
     exit 1
 else
     echo -e "${GREEN}✓ Alle Services wurden erfolgreich gestartet!${NC}"
-    docker-compose ps
+    $DOCKER_COMPOSE ps
 fi
 
 # IP des Servers anzeigen
@@ -93,4 +103,4 @@ echo -e "\n${GREEN}✓ Kormit wurde erfolgreich bereitgestellt!${NC}"
 echo -e "${BLUE}Sie können darauf zugreifen unter:${NC}"
 echo -e "  Frontend: http://$SERVER_IP/"
 echo -e "  API:      http://$SERVER_IP/api"
-echo -e "\n${YELLOW}Tipp: Zum Anzeigen der Logs verwenden Sie:${NC} docker-compose logs -f" 
+echo -e "\n${YELLOW}Tipp: Zum Anzeigen der Logs verwenden Sie:${NC} $DOCKER_COMPOSE logs -f"

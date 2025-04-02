@@ -1,9 +1,10 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Kormit Installation Script
 # Installiert die Kormit-Anwendung mit Docker Compose
 # Version 1.0.0
 
-set -e
+# Fehlerbehandlung aktivieren
+set -eo pipefail
 
 # Farbdefinitionen
 GREEN='\033[0;32m'
@@ -81,7 +82,7 @@ echo -e "${CYAN}▶ Installationsdetails:${RESET}"
 echo -e "  - Installationsverzeichnis: ${INSTALL_DIR}"
 echo -e "  - Domain-Name: ${DOMAIN_NAME}"
 echo -e "  - HTTP-Port: ${HTTP_PORT}"
-if [ "$HTTP_ONLY" = false ]; then
+if [[ "$HTTP_ONLY" = false ]]; then
     echo -e "  - HTTPS-Port: ${HTTPS_PORT}"
     echo -e "  - Protokoll: HTTP & HTTPS"
 else
@@ -96,11 +97,11 @@ mkdir -p "${INSTALL_DIR}/docker/production/ssl"
 
 # Docker-Compose-Datei kopieren
 echo -e "${CYAN}▶ Kopiere Docker-Compose-Konfiguration...${RESET}"
-cp $(dirname "$0")/docker/production/docker-compose.yml "${INSTALL_DIR}/docker/production/"
+cp "$(dirname "$0")/docker/production/docker-compose.yml" "${INSTALL_DIR}/docker/production/"
 
 # Nginx-Konfiguration kopieren
 echo -e "${CYAN}▶ Kopiere Nginx-Konfiguration...${RESET}"
-cp $(dirname "$0")/docker/production/nginx.conf "${INSTALL_DIR}/docker/production/"
+cp "$(dirname "$0")/docker/production/nginx.conf" "${INSTALL_DIR}/docker/production/"
 
 # Erstelle .env-Datei
 echo -e "${CYAN}▶ Erstelle Umgebungsvariablen-Datei...${RESET}"
@@ -133,7 +134,7 @@ FRONTEND_IMAGE=${FRONTEND_IMAGE}
 EOL
 
 # HTTPS-Konfiguration
-if [ "$HTTP_ONLY" = false ]; then
+if [[ "$HTTP_ONLY" = false ]]; then
     echo -e "${CYAN}▶ Aktiviere HTTPS und erstelle SSL-Zertifikat...${RESET}"
     
     # Erstelle selbstsigniertes Zertifikat
@@ -160,7 +161,7 @@ else
     touch "${INSTALL_DIR}/docker/production/ssl/kormit.crt"
     
     # Entferne den HTTPS-Port aus der docker-compose.yml
-    sed -i '/- "${HTTPS_PORT:-443}:443"/d' "${INSTALL_DIR}/docker/production/docker-compose.yml"
+    sed -i 's/- "${HTTPS_PORT:-443}:443"/#- "${HTTPS_PORT:-443}:443"/' "${INSTALL_DIR}/docker/production/docker-compose.yml"
     
     echo -e "${GREEN}✅ HTTP-only Modus wurde konfiguriert.${RESET}"
 fi
@@ -170,8 +171,8 @@ echo -e "${CYAN}▶ Erstelle Management-Skripte...${RESET}"
 
 # Start-Skript
 cat > "${INSTALL_DIR}/start.sh" << 'EOL'
-#!/bin/bash
-cd $(dirname $0)/docker/production
+#!/usr/bin/env bash
+cd "$(dirname "$0")/docker/production" || { echo "Konnte nicht ins Verzeichnis wechseln"; exit 1; }
 docker compose up -d
 echo "Kormit wurde gestartet und ist erreichbar."
 EOL
@@ -179,8 +180,8 @@ chmod +x "${INSTALL_DIR}/start.sh"
 
 # Stop-Skript
 cat > "${INSTALL_DIR}/stop.sh" << 'EOL'
-#!/bin/bash
-cd $(dirname $0)/docker/production
+#!/usr/bin/env bash
+cd "$(dirname "$0")/docker/production" || { echo "Konnte nicht ins Verzeichnis wechseln"; exit 1; }
 docker compose down
 echo "Kormit wurde gestoppt."
 EOL
@@ -188,8 +189,8 @@ chmod +x "${INSTALL_DIR}/stop.sh"
 
 # Update-Skript
 cat > "${INSTALL_DIR}/update.sh" << 'EOL'
-#!/bin/bash
-cd $(dirname $0)/docker/production
+#!/usr/bin/env bash
+cd "$(dirname "$0")/docker/production" || { echo "Konnte nicht ins Verzeichnis wechseln"; exit 1; }
 docker compose pull
 docker compose up -d
 echo "Kormit wurde aktualisiert."
@@ -201,14 +202,14 @@ echo -e "${GREEN}✅ Management-Skripte wurden erstellt.${RESET}"
 # Frage, ob Kormit direkt gestartet werden soll
 echo -e "\n${CYAN}▶ Installation abgeschlossen!${RESET}"
 echo -e "${YELLOW}Möchten Sie Kormit jetzt starten? (J/n)${RESET}"
-read -p "> " start_now
+read -rp "> " start_now
 
 if [[ ! "$start_now" =~ ^[nN]$ ]]; then
     echo -e "${CYAN}▶ Starte Kormit...${RESET}"
     "${INSTALL_DIR}/start.sh"
     
     # Server-IP oder Domain anzeigen
-    if [ "$DOMAIN_NAME" = "localhost" ]; then
+    if [[ "$DOMAIN_NAME" = "localhost" ]]; then
         SERVER_IP=$(hostname -I | awk '{print $1}')
         ACCESS_URL="$SERVER_IP"
     else
@@ -218,7 +219,7 @@ if [[ ! "$start_now" =~ ^[nN]$ ]]; then
     echo -e "\n${GREEN}✅ Kormit wurde erfolgreich installiert und gestartet!${RESET}"
     echo -e "${CYAN}Sie können nun auf Kormit zugreifen unter:${RESET}"
     
-    if [ "$HTTP_ONLY" = true ]; then
+    if [[ "$HTTP_ONLY" = true ]]; then
         echo -e "  http://${ACCESS_URL}:${HTTP_PORT}"
     else
         echo -e "  https://${ACCESS_URL}:${HTTPS_PORT}"
