@@ -12,6 +12,20 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+# Logging-Funktion
+log() {
+    local level=$1
+    shift
+    local message=$1
+    case $level in
+        "INFO") echo -e "${BLUE}[INFO]${NC} $message" ;;
+        "SUCCESS") echo -e "${GREEN}[SUCCESS]${NC} $message" ;;
+        "WARNING") echo -e "${YELLOW}[WARNING]${NC} $message" ;;
+        "ERROR") echo -e "${RED}[ERROR]${NC} $message" >&2 ;;
+    esac
+}
+
+# Banner anzeigen
 echo -e "${BLUE}
    _  __                    _ _   
   | |/ /___  _ __ _ __ ___ (_) |_ 
@@ -24,12 +38,12 @@ echo -e "${GREEN}Kormit Deployment Tool${NC}\n"
 
 # Überprüfen, ob Docker und Docker Compose installiert sind
 if ! command -v docker &> /dev/null; then
-    echo -e "${RED}✘ Docker ist nicht installiert. Bitte installieren Sie Docker und versuchen Sie es erneut.${NC}"
+    log "ERROR" "Docker ist nicht installiert. Bitte installieren Sie Docker und versuchen Sie es erneut."
     exit 1
 fi
 
 if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
-    echo -e "${RED}✘ Docker Compose ist nicht installiert. Bitte installieren Sie Docker Compose und versuchen Sie es erneut.${NC}"
+    log "ERROR" "Docker Compose ist nicht installiert. Bitte installieren Sie Docker Compose und versuchen Sie es erneut."
     exit 1
 fi
 
@@ -47,60 +61,59 @@ mkdir -p ssl
 BACKEND_TAR="kormit-backend.tar"
 FRONTEND_TAR="kormit-frontend.tar"
 
-# Überprüfen, ob Images als Dateien bereitgestellt werden
-if [[ -f "$BACKEND_TAR" ]]; then
-    echo -e "${YELLOW}→ Backend-Image-Datei gefunden. Lade...${NC}"
-    docker load -i "$BACKEND_TAR"
-    # Setze Umgebungsvariable auf den geladenen Image-Namen
-    export BACKEND_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep kormit-backend | head -n 1)
-    echo -e "${GREEN}✓ Backend-Image geladen: $BACKEND_IMAGE${NC}"
-else
-    echo -e "${YELLOW}→ Keine lokale Backend-Image-Datei gefunden. Versuche, das Image aus der Registry zu ziehen...${NC}"
-    if ! docker pull ghcr.io/kormit-panel/kormit/kormit-backend:latest; then
-        echo -e "${YELLOW}! Konnte das Backend-Image nicht aus der Registry ziehen. Stelle sicher, dass es verfügbar ist.${NC}"
-        echo -e "${YELLOW}! Sie können den Pfad zum lokalen Image mit BACKEND_IMAGE=... überschreiben.${NC}"
+# Funktion zum Laden eines Docker-Images
+load_docker_image() {
+    local image_name=$1
+    local tar_file=$2
+    local registry_path="ghcr.io/kormit-panel/kormit/$image_name"
+    
+    if [[ -f "$tar_file" ]]; then
+        log "INFO" "Lade $image_name aus lokaler Datei..."
+        if docker load -i "$tar_file"; then
+            export "${image_name^^}_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "$image_name" | head -n 1)"
+            log "SUCCESS" "$image_name geladen: ${!image_name^^}_IMAGE"
+        else
+            log "ERROR" "Fehler beim Laden von $image_name"
+            return 1
+        fi
     else
-        echo -e "${GREEN}✓ Backend-Image aus Registry geholt${NC}"
+        log "WARNING" "Keine lokale $image_name-Datei gefunden. Versuche, das Image aus der Registry zu ziehen..."
+        if docker pull "$registry_path:latest"; then
+            log "SUCCESS" "$image_name aus Registry geholt"
+        else
+            log "WARNING" "Konnte $image_name nicht aus der Registry ziehen. Stellen Sie sicher, dass es verfügbar ist."
+            log "WARNING" "Sie können den Pfad zum lokalen Image mit ${image_name^^}_IMAGE=... überschreiben."
+            return 1
+        fi
     fi
-fi
+}
 
-if [[ -f "$FRONTEND_TAR" ]]; then
-    echo -e "${YELLOW}→ Frontend-Image-Datei gefunden. Lade...${NC}"
-    docker load -i "$FRONTEND_TAR"
-    # Setze Umgebungsvariable auf den geladenen Image-Namen
-    export FRONTEND_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep kormit-frontend | head -n 1)
-    echo -e "${GREEN}✓ Frontend-Image geladen: $FRONTEND_IMAGE${NC}"
-else
-    echo -e "${YELLOW}→ Keine lokale Frontend-Image-Datei gefunden. Versuche, das Image aus der Registry zu ziehen...${NC}"
-    if ! docker pull ghcr.io/kormit-panel/kormit/kormit-frontend:latest; then
-        echo -e "${YELLOW}! Konnte das Frontend-Image nicht aus der Registry ziehen. Stelle sicher, dass es verfügbar ist.${NC}"
-        echo -e "${YELLOW}! Sie können den Pfad zum lokalen Image mit FRONTEND_IMAGE=... überschreiben.${NC}"
-    else
-        echo -e "${GREEN}✓ Frontend-Image aus Registry geholt${NC}"
-    fi
-fi
+# Images laden
+load_docker_image "kormit-backend" "$BACKEND_TAR"
+load_docker_image "kormit-frontend" "$FRONTEND_TAR"
 
-# Starten der Services
-echo -e "${BLUE}→ Starte Kormit-Services...${NC}"
+# Services starten
+log "INFO" "Starte Kormit-Services..."
 $DOCKER_COMPOSE down 2>/dev/null || true
 $DOCKER_COMPOSE up -d
 
 # Überprüfen, ob alles läuft
-echo -e "${YELLOW}→ Überprüfe Service-Status...${NC}"
+log "INFO" "Überprüfe Service-Status..."
 sleep 5
 if $DOCKER_COMPOSE ps | grep -q "Exit"; then
-    echo -e "${RED}✘ Einige Services konnten nicht gestartet werden:${NC}"
+    log "ERROR" "Einige Services konnten nicht gestartet werden:"
     $DOCKER_COMPOSE ps
     exit 1
 else
-    echo -e "${GREEN}✓ Alle Services wurden erfolgreich gestartet!${NC}"
+    log "SUCCESS" "Alle Services wurden erfolgreich gestartet!"
     $DOCKER_COMPOSE ps
 fi
 
 # IP des Servers anzeigen
 SERVER_IP=$(hostname -I | awk '{print $1}')
-echo -e "\n${GREEN}✓ Kormit wurde erfolgreich bereitgestellt!${NC}"
-echo -e "${BLUE}Sie können darauf zugreifen unter:${NC}"
+log "SUCCESS" "Kormit wurde erfolgreich bereitgestellt!"
+log "INFO" "Sie können darauf zugreifen unter:"
 echo -e "  Frontend: http://$SERVER_IP/"
 echo -e "  API:      http://$SERVER_IP/api"
-echo -e "\n${YELLOW}Tipp: Zum Anzeigen der Logs verwenden Sie:${NC} $DOCKER_COMPOSE logs -f"
+
+log "INFO" "Tipp: Zum Anzeigen der Logs verwenden Sie: $DOCKER_COMPOSE logs -f"

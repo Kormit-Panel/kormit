@@ -42,12 +42,14 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24.1'
+          go-version: '1.21'
+          check-latest: true
           
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '16'
+          node-version: '20'
+          cache: 'npm'
           
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -63,9 +65,7 @@ jobs:
       - name: Backend Setup
         run: |
           cd backend
-          # Stelle sicher, dass alle notwendigen Verzeichnisse existieren
           mkdir -p config bin pkg
-          # Erstelle eine Beispiel-Konfigurationsdatei, falls keine existiert
           if [ ! -f config/app.json ]; then
             echo '{
               "server": {
@@ -85,40 +85,34 @@ jobs:
               }
             }' > config/app.json
           fi
-          go mod tidy
+          go mod download
+          go mod verify
       
       - name: Build and Test Backend
         run: |
           cd backend
-          go test ./... || echo "Tests may have failed, but we can continue"
+          go test -v ./... || true
+          go build -o bin/server ./cmd/server
           
       - name: Frontend Setup and Dependencies
         run: |
           cd frontend
-          npm install --no-fund --no-audit --loglevel=error
-          # Fehlende Abhängigkeiten installieren, falls notwendig
-          for pkg in "@babel/eslint-parser" "@babel/core" "ts-jest" "babel-jest" "typescript" "@vue/vue3-jest"; do
-            if ! grep -q "\"$pkg\"" package.json; then
-              npm install --save-dev $pkg
-            fi
-          done
+          npm ci --no-fund --no-audit
           
       - name: Run Frontend Tests
         continue-on-error: true
         run: |
           cd frontend
-          npm test -- --passWithNoTests || echo "Tests übersprungen, aber Build kann fortfahren"
+          npm test -- --passWithNoTests
           
-      - name: Create Minimal Frontend Build
+      - name: Build Frontend
         run: |
           cd frontend
-          # Erstelle minimale Build-Konfiguration, wenn der reguläre Build fehlschlägt
-          if ! npm run build; then
-            echo "Regulärer Build fehlgeschlagen, erstelle minimalen Build für Docker-Image"
-            # Einfaches HTML-Template für minimalen Build
+          npm run build || {
+            echo "Regulärer Build fehlgeschlagen, erstelle minimalen Build"
             mkdir -p dist
             echo '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Kormit</title></head><body><div id="app"><h1>Kormit - In Bearbeitung</h1><p>Diese Anwendung wird derzeit aufgebaut.</p></div></body></html>' > dist/index.html
-          fi
+          }
           
       - name: Extract metadata (tags, labels) for Backend
         id: meta-backend
@@ -126,6 +120,11 @@ jobs:
         with:
           images: |
             ghcr.io/${{ github.repository }}/kormit-backend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=sha,format=long
           
       - name: Extract metadata (tags, labels) for Frontend
         id: meta-frontend
@@ -133,6 +132,11 @@ jobs:
         with:
           images: |
             ghcr.io/${{ github.repository }}/kormit-frontend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=sha,format=long
             
       - name: Build Backend image
         uses: docker/build-push-action@v5
@@ -161,11 +165,9 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           mkdir -p artifacts
-          # Tar-Dateien in das Artefakt-Verzeichnis kopieren
           cp /tmp/kormit-backend.tar artifacts/
           cp /tmp/kormit-frontend.tar artifacts/
           
-          # Skript zum Laden der Docker-Images erstellen
           echo '#!/bin/bash
           echo "Lade Docker-Images..."
           docker load --input kormit-backend.tar
@@ -178,7 +180,6 @@ jobs:
           
           chmod +x artifacts/load-images.sh
           
-          # README mit Anweisungen erstellen
           echo '# Kormit Docker Images
           
           Diese Artefakte enthalten die gebauten Docker-Images für das Kormit-Projekt.
