@@ -40,6 +40,7 @@ TMP_DIR="/tmp/kormit-install"
 CONFIG_FILE="$HOME/.kormit_config"
 
 # Globale Variablen
+KORMIT_MANAGER_VERSION="2.0.0-Pro"
 VERSION="2.0.0"
 DOMAIN_NAME="localhost"
 HTTP_PORT="80"
@@ -90,7 +91,7 @@ check_root() {
 print_logo() {
     if [ "$ANIMATION_ENABLED" = true ]; then
         clear
-        # Animiertes Logo
+        # Animiertes Logo mit mehr Sci-Fi-Elementen
         echo -e "${CYAN}${BOLD}"
         echo "╔════════════════════════════════════════════════════════════════╗"
         echo "║                                                                ║"
@@ -110,7 +111,13 @@ print_logo() {
         echo "║                                                                ║"
         echo "╠════════════════════════════════════════════════════════════════╣"
         sleep 0.05
-        echo -e "║            ${GREEN}Management Tool v${VERSION}${CYAN} - ${MAGENTA}ProEdition${CYAN}              ║"
+        echo -e "║     ${GREEN}Kormit_Manager_Version:${CYAN} ${MAGENTA}$KORMIT_MANAGER_VERSION${CYAN}           ║"
+        echo "╠════════════════════════════════════════════════════════════════╣"
+        sleep 0.05
+        echo "║                                                                ║"
+        echo "║   ${MAGENTA}⚡ ${YELLOW}█▀▀ █▀█ █▄░█ ▀█▀ █▀█ █▀█ █░░   ${MAGENTA}█▀▀ █▀▀ █▄░█ ▀█▀ █▀▀ █▀█ ${CYAN} ║"
+        echo "║   ${MAGENTA}⚡ ${YELLOW}█▄▄ █▄█ █░▀█ ░█░ █▀▄ █▄█ █▄▄   ${MAGENTA}█▄▄ █▀░ █░▀█ ░█░ ██▄ █▀▄ ${CYAN} ║"
+        echo "║                                                                ║"
         echo "╚════════════════════════════════════════════════════════════════╝"
         echo -e "${RESET}"
     else
@@ -127,7 +134,12 @@ print_logo() {
         echo "║   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝╚═╝   ╚═╝               ║"
         echo "║                                                                ║"
         echo "╠════════════════════════════════════════════════════════════════╣"
-        echo -e "║            ${GREEN}Management Tool v${VERSION}${CYAN} - ${MAGENTA}ProEdition${CYAN}              ║"
+        echo -e "║     ${GREEN}Kormit_Manager_Version:${CYAN} ${MAGENTA}$KORMIT_MANAGER_VERSION${CYAN}           ║"
+        echo "╠════════════════════════════════════════════════════════════════╣"
+        echo "║                                                                ║"
+        echo "║   ${MAGENTA}⚡ ${YELLOW}█▀▀ █▀█ █▄░█ ▀█▀ █▀█ █▀█ █░░   ${MAGENTA}█▀▀ █▀▀ █▄░█ ▀█▀ █▀▀ █▀█ ${CYAN} ║"
+        echo "║   ${MAGENTA}⚡ ${YELLOW}█▄▄ █▄█ █░▀█ ░█░ █▀▄ █▄█ █▄▄   ${MAGENTA}█▄▄ █▀░ █░▀█ ░█░ ██▄ █▀▄ ${CYAN} ║"
+        echo "║                                                                ║"
         echo "╚════════════════════════════════════════════════════════════════╝"
         echo -e "${RESET}"
     fi
@@ -530,10 +542,10 @@ install_docker_compose() {
     fi
     
     run_with_spinner "
-        mkdir -p /usr/local/lib/docker/cli-plugins
+    mkdir -p /usr/local/lib/docker/cli-plugins
         curl -SL \"https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/lib/docker/cli-plugins/docker-compose
-        chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
-        ln -sf /usr/local/lib/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
+    chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+    ln -sf /usr/local/lib/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
     " "Docker Compose wird installiert"
     
     # Prüfen, ob die Installation erfolgreich war
@@ -560,7 +572,7 @@ install_curl() {
             apk add --no-cache curl
             ;;
         *)
-            exit 1
+        exit 1
             ;;
     esac" "Curl wird installiert"
     
@@ -697,8 +709,8 @@ install_kormit() {
     log_debug "Ausführen: $cmd"
     
     # Mache das Skript ausführbar
-    chmod +x "$TMP_DIR/deploy/install.sh"
-    
+        chmod +x "$TMP_DIR/deploy/install.sh"
+        
     # Führe das Skript aus
     if ! $cmd; then
         log_error "Installation fehlgeschlagen. Überprüfen Sie die Fehlermeldungen."
@@ -713,11 +725,11 @@ install_kormit() {
         return 1
     fi
     
-    log_success "Kormit wurde erfolgreich installiert."
-    
-    # Nach der Installation die Image-Tags korrigieren
-    log_info "Korrigiere Image-Tags in der .env-Datei..."
-    fix_image_tags
+            log_success "Kormit wurde erfolgreich installiert."
+            
+            # Nach der Installation die Image-Tags korrigieren
+            log_info "Korrigiere Image-Tags in der .env-Datei..."
+            fix_image_tags
     
     # Zeige Zugriffsinformationen
     show_access_info
@@ -804,15 +816,15 @@ get_installation_params() {
     
     # Domain-Name mit Validierung
     while true; do
-        read -p "Domain-Name oder IP-Adresse [$DOMAIN_NAME]: " user_domain
-        if [ -n "$user_domain" ]; then
+    read -p "Domain-Name oder IP-Adresse [$DOMAIN_NAME]: " user_domain
+    if [ -n "$user_domain" ]; then
             # Prüfe, ob es ein gültiger Domainname oder eine IP ist
             if [[ "$user_domain" =~ ^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$ ]] || [[ "$user_domain" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-                DOMAIN_NAME="$user_domain"
+        DOMAIN_NAME="$user_domain"
                 break
             else
                 log_error "Ungültiger Domain-Name oder IP-Adresse. Bitte erneut eingeben."
-            fi
+    fi
         else
             break
         fi
@@ -854,13 +866,13 @@ get_installation_params() {
     
     # HTTP-Port mit Validierung
     while true; do
-        read -p "HTTP-Port [$HTTP_PORT]: " user_http_port
-        if [ -n "$user_http_port" ]; then
+    read -p "HTTP-Port [$HTTP_PORT]: " user_http_port
+    if [ -n "$user_http_port" ]; then
             # Prüfe, ob es sich um eine gültige Portnummer handelt
             if [[ "$user_http_port" =~ ^[0-9]+$ ]] && [ "$user_http_port" -ge 1 ] && [ "$user_http_port" -le 65535 ]; then
                 # Prüfe, ob der Port bereits belegt ist
                 if check_port "$user_http_port"; then
-                    HTTP_PORT="$user_http_port"
+        HTTP_PORT="$user_http_port"
                     break
                 else
                     log_warning "Port $user_http_port ist bereits belegt. Bitte wählen Sie einen anderen Port."
@@ -888,15 +900,15 @@ get_installation_params() {
     # HTTPS-Port (nur wenn HTTPS aktiviert ist)
     if [ "$USE_HTTPS" = true ]; then
         while true; do
-            read -p "HTTPS-Port [$HTTPS_PORT]: " user_https_port
-            if [ -n "$user_https_port" ]; then
+        read -p "HTTPS-Port [$HTTPS_PORT]: " user_https_port
+        if [ -n "$user_https_port" ]; then
                 # Prüfe, ob es sich um eine gültige Portnummer handelt
                 if [[ "$user_https_port" =~ ^[0-9]+$ ]] && [ "$user_https_port" -ge 1 ] && [ "$user_https_port" -le 65535 ]; then
                     # Stelle sicher, dass HTTP- und HTTPS-Ports unterschiedlich sind
                     if [ "$user_https_port" = "$HTTP_PORT" ]; then
                         log_error "HTTPS-Port und HTTP-Port dürfen nicht identisch sein."
                     elif check_port "$user_https_port"; then
-                        HTTPS_PORT="$user_https_port"
+            HTTPS_PORT="$user_https_port"
                         break
                     else
                         log_warning "Port $user_https_port ist bereits belegt. Bitte wählen Sie einen anderen Port."
@@ -1570,8 +1582,13 @@ show_menu() {
         fi
     fi
     
+    # Systeminfo anzeigen
+    KERNEL_VERSION=$(uname -r)
+    echo -e "\n${CYAN}${BOLD}⚙️ SYSTEM:${RESET}"
+    echo -e "  ${CYAN}${BOLD}●${RESET} Betriebssystem: ${GREEN}Linux ${KERNEL_VERSION}${RESET}"
+    
     # Statusanzeige
-    echo -e "\n${CYAN}${BOLD}STATUS:${RESET}"
+    echo -e "\n${CYAN}${BOLD}📡 STATUS:${RESET}"
     if [ "$is_installed" = true ]; then
         if [ "$is_running" = true ]; then
             echo -e "  ${GREEN}${BOLD}●${RESET} Kormit ist ${GREEN}aktiv${RESET} und läuft auf ${CYAN}${DOMAIN_NAME}:${HTTP_PORT}${RESET}"
@@ -1583,20 +1600,20 @@ show_menu() {
     fi
     
     # Hauptmenü
-    echo -e "\n${CYAN}${BOLD}HAUPTMENÜ${RESET}"
-    echo -e "${CYAN}═════════${RESET}"
+    echo -e "\n${CYAN}${BOLD}🔷 HAUPTMENÜ${RESET}"
+    echo -e "${CYAN}$(printf '═%.0s' {1..60})${RESET}"
     
     # Setup-Bereich
-    echo -e "${BOLD}Setup:${RESET}"
+    echo -e "${BOLD}🔧 Setup:${RESET}"
     echo -e " ${GREEN}1${RESET}) ${BOLD}Abhängigkeiten prüfen${RESET} - Docker, Git, etc."
     echo -e " ${GREEN}2${RESET}) ${BOLD}Repository klonen/aktualisieren${RESET} - Neueste Code-Version holen"
     echo -e " ${GREEN}3${RESET}) ${BOLD}Kormit installieren${RESET} - Neue Installation durchführen"
     
     # Trennlinie
-    echo -e "${CYAN}───────────────────────────${RESET}"
+    echo -e "${CYAN}$(printf '─%.0s' {1..60})${RESET}"
     
     # Service-Bereich mit Status-Symbolen
-    echo -e "${BOLD}Verwaltung:${RESET}"
+    echo -e "${BOLD}🚀 Verwaltung:${RESET}"
     if [ "$is_running" = true ]; then
         echo -e " ${GREEN}4${RESET}) ${BOLD}Kormit ${RED}stoppen${RESET} - Dienst anhalten"
     else
@@ -1606,35 +1623,40 @@ show_menu() {
     echo -e " ${GREEN}6${RESET}) ${BOLD}Kormit aktualisieren${RESET} - Auf neue Version aktualisieren"
     
     # Trennlinie
-    echo -e "${CYAN}───────────────────────────${RESET}"
+    echo -e "${CYAN}$(printf '─%.0s' {1..60})${RESET}"
     
     # Monitoring- und Wartungsbereich
-    echo -e "${BOLD}Monitoring & Wartung:${RESET}"
+    echo -e "${BOLD}📊 Monitoring & Wartung:${RESET}"
     echo -e " ${GREEN}7${RESET}) ${BOLD}Logs anzeigen${RESET} - Container-Logs einsehen"
     echo -e " ${GREEN}8${RESET}) ${BOLD}Status anzeigen${RESET} - Aktuellen Dienststatus prüfen"
     echo -e " ${GREEN}9${RESET}) ${BOLD}Installation reparieren${RESET} - Erweiterte Reparaturfunktionen"
     
     # Trennlinie
-    echo -e "${CYAN}───────────────────────────${RESET}"
+    echo -e "${CYAN}$(printf '─%.0s' {1..60})${RESET}"
     
     # Weitere Optionen
-    echo -e "${BOLD}Weitere Optionen:${RESET}"
+    echo -e "${BOLD}⚙️ Weitere Optionen:${RESET}"
     echo -e " ${GREEN}d${RESET}) ${BOLD}Debug-Modus${RESET} - ${is_enabled $DEBUG}"
     echo -e " ${GREEN}a${RESET}) ${BOLD}Animationen${RESET} - ${is_enabled $ANIMATION_ENABLED}"
     echo -e " ${GREEN}u${RESET}) ${BOLD}Auto-Update-Check${RESET} - ${is_enabled $AUTO_UPDATE_CHECK}"
     echo -e " ${GREEN}p${RESET}) ${BOLD}Installationspfad ändern${RESET} - (aktuell: ${CYAN}$INSTALL_DIR${RESET})"
     
     # Trennlinie
-    echo -e "${CYAN}───────────────────────────${RESET}"
+    echo -e "${CYAN}$(printf '─%.0s' {1..60})${RESET}"
     echo -e " ${RED}0${RESET}) ${RED}${BOLD}Beenden${RESET} - Programm beenden"
     
     # Schnellzugriff für laufende Instanz
     if [ "$is_running" = true ]; then
-        echo -e "\n${BOLD}Schnellzugriff:${RESET} ${UNDERLINE}http://${DOMAIN_NAME}:${HTTP_PORT}${RESET}"
+        echo -e "\n${BOLD}🌐 Schnellzugriff:${RESET} ${UNDERLINE}http://${DOMAIN_NAME}:${HTTP_PORT}${RESET}"
     fi
     
-    echo -e "\nWählen Sie eine Option:"
-    read -p "> " choice
+    # Fußzeile
+    VERSION_INFO="${KORMIT_MANAGER_VERSION} (Linux)"
+    echo -e "\n${DIM}Kormit Control Center ${VERSION_INFO} | $(date '+%d.%m.%Y %H:%M')${RESET}"
+    
+    echo -e "\nWählen Sie eine Option [0-9, d, a, u, p]:"
+    read -n 1 -r choice
+    echo
     
     case $choice in
         1)
@@ -1690,11 +1712,21 @@ show_menu() {
             change_install_path
             ;;
         0)
-            echo -e "${GREEN}Auf Wiedersehen!${RESET}"
+            clear
+            echo -e "${GREEN}${BOLD}"
+            echo "╔════════════════════════════════════════════════════════════════╗"
+            echo "║                                                                ║"
+            echo "║   Vielen Dank für die Nutzung des Kormit Control Centers!      ║"
+            echo "║                                                                ║"
+            echo "║   Besuchen Sie uns unter: https://github.com/kormit-panel      ║"
+            echo "║                                                                ║"
+            echo "╚════════════════════════════════════════════════════════════════╝"
+            echo -e "${RESET}"
+            sleep 1
             exit 0
             ;;
         *)
-            log_error "Ungültige Option. Bitte wählen Sie eine gültige Option."
+            log_error "Ungültige Option. Bitte wählen Sie eine gültige Option [0-9, d, a, u, p]."
             press_enter_to_continue
             ;;
     esac
@@ -1728,8 +1760,9 @@ repair_menu() {
     echo -e " ${GREEN}8${RESET}) ${BOLD}Neuinstallation vorbereiten${RESET} - Alle Daten löschen"
     echo -e " ${RED}0${RESET}) ${BOLD}Zurück${RESET} - Zum Hauptmenü zurückkehren"
     
-    echo -e "\nWählen Sie eine Option (0-8):"
-    read -p "> " repair_option
+    echo -e "\nWählen Sie eine Option [0-8]:"
+    read -n 1 -r repair_option
+    echo
     
     case $repair_option in
         1)
@@ -1769,7 +1802,7 @@ repair_menu() {
             return
             ;;
         *)
-            log_error "Ungültige Option."
+            log_error "Ungültige Option. Bitte wählen Sie eine Option zwischen 0 und 8."
             press_enter_to_continue
             ;;
     esac
@@ -1780,15 +1813,15 @@ repair_menu() {
 
 # Toggle-Funktionen für Menüoptionen
 toggle_debug() {
-    if [ "$DEBUG" = true ]; then
-        DEBUG=false
+            if [ "$DEBUG" = true ]; then
+                DEBUG=false
         log_info "Debug-Modus wurde deaktiviert."
-    else
-        DEBUG=true
+            else
+                DEBUG=true
         log_info "Debug-Modus wurde aktiviert."
-    fi
+            fi
     save_config
-    press_enter_to_continue
+            press_enter_to_continue
 }
 
 toggle_animations() {
@@ -1816,16 +1849,16 @@ toggle_auto_update() {
 }
 
 change_install_path() {
-    echo -e "Aktuelles Installationsverzeichnis: ${BOLD}$INSTALL_DIR${RESET}"
+            echo -e "Aktuelles Installationsverzeichnis: ${BOLD}$INSTALL_DIR${RESET}"
     echo -e "Geben Sie ein neues Installationsverzeichnis ein (oder [Enter] für keine Änderung):"
     read -p "> " new_dir
     
-    if [ -n "$new_dir" ]; then
-        INSTALL_DIR="$new_dir"
+            if [ -n "$new_dir" ]; then
+                INSTALL_DIR="$new_dir"
         log_success "Installationsverzeichnis geändert auf: ${BOLD}$INSTALL_DIR${RESET}"
         save_config
-    fi
-    press_enter_to_continue
+            fi
+            press_enter_to_continue
 }
 
 # Unterstützung für Datenbank-Backups
@@ -1941,7 +1974,7 @@ main() {
     detect_os
     
     # Menü anzeigen
-    show_menu
+        show_menu
 }
 
 # Skript starten
