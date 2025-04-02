@@ -1643,6 +1643,33 @@ run_diagnostics() {
 start_kormit() {
     print_header "Kormit wird gestartet"
     
+    # Prüfe, ob Kormit überhaupt installiert ist
+    if [[ ! -d "$INSTALL_DIR" ]]; then
+        log_error "Keine Installation in $INSTALL_DIR gefunden."
+        echo -e "${YELLOW}Möchten Sie Kormit installieren? (j/N)${RESET}"
+        read -rp "> " install_choice
+        if [[ "$install_choice" =~ ^[jJ]$ ]]; then
+            install_kormit
+        else
+            offer_repair_scripts
+        fi
+        return
+    fi
+    
+    # Prüfe, ob das Production-Verzeichnis existiert
+    if [[ ! -d "$INSTALL_DIR/docker/production" ]]; then
+        log_error "Production-Verzeichnis nicht gefunden: $INSTALL_DIR/docker/production"
+        echo -e "${YELLOW}Möchten Sie die Verzeichnisstruktur erstellen? (J/n)${RESET}"
+        read -rp "> " create_dirs_choice
+        if [[ ! "$create_dirs_choice" =~ ^[nN]$ ]]; then
+            create_missing_directories
+        else
+            offer_repair_scripts
+        fi
+        return
+    fi
+    
+    # Prüfe, ob das Start-Skript existiert
     if [[ -f "$INSTALL_DIR/start.sh" ]]; then
         log_info "Starte Kormit..."
         chmod +x "$INSTALL_DIR/start.sh"
@@ -1654,14 +1681,38 @@ start_kormit() {
         fi
     else
         log_error "Start-Skript konnte nicht gefunden werden: $INSTALL_DIR/start.sh"
-        log_info "Ist Kormit installiert? Versuchen Sie zuerst 'Kormit installieren'."
-        offer_repair_scripts
+        
+        # Biete an, das Skript zu erstellen
+        echo -e "${YELLOW}Möchten Sie das Start-Skript erstellen? (J/n)${RESET}"
+        read -rp "> " create_script_choice
+        if [[ ! "$create_script_choice" =~ ^[nN]$ ]]; then
+            repair_scripts
+            # Nach der Reparatur erneut versuchen zu starten
+            start_kormit
+        else
+            log_info "Ist Kormit installiert? Versuchen Sie zuerst 'Kormit installieren'."
+            offer_repair_scripts
+        fi
     fi
 }
 
 stop_kormit() {
     print_header "Kormit wird gestoppt"
     
+    # Prüfe, ob Kormit überhaupt installiert ist
+    if [[ ! -d "$INSTALL_DIR" ]]; then
+        log_error "Keine Installation in $INSTALL_DIR gefunden."
+        echo -e "${YELLOW}Möchten Sie Kormit zuerst installieren? (j/N)${RESET}"
+        read -rp "> " install_choice
+        if [[ "$install_choice" =~ ^[jJ]$ ]]; then
+            install_kormit
+        else
+            offer_repair_scripts
+        fi
+        return
+    fi
+    
+    # Prüfe, ob das Stop-Skript existiert
     if [[ -f "$INSTALL_DIR/stop.sh" ]]; then
         log_info "Stoppe Kormit..."
         chmod +x "$INSTALL_DIR/stop.sh"
@@ -1673,8 +1724,18 @@ stop_kormit() {
         fi
     else
         log_error "Stop-Skript konnte nicht gefunden werden: $INSTALL_DIR/stop.sh"
-        log_info "Ist Kormit installiert? Versuchen Sie zuerst 'Kormit installieren'."
-        offer_repair_scripts
+        
+        # Biete an, das Skript zu erstellen
+        echo -e "${YELLOW}Möchten Sie das Stop-Skript erstellen? (J/n)${RESET}"
+        read -rp "> " create_script_choice
+        if [[ ! "$create_script_choice" =~ ^[nN]$ ]]; then
+            repair_scripts
+            # Nach der Reparatur erneut versuchen zu stoppen
+            stop_kormit
+        else
+            log_info "Ist Kormit installiert? Versuchen Sie zuerst 'Kormit installieren'."
+            offer_repair_scripts
+        fi
     fi
 }
 
@@ -1756,6 +1817,22 @@ check_status() {
 repair_scripts() {
     print_header "Skripte werden repariert"
     
+    # Stelle sicher, dass das Installationsverzeichnis existiert
+    if [[ ! -d "$INSTALL_DIR" ]]; then
+        log_warning "Installationsverzeichnis existiert nicht: $INSTALL_DIR"
+        log_info "Erstelle Verzeichnis..."
+        mkdir -p "$INSTALL_DIR"
+    fi
+    
+    # Stelle sicher, dass das Production-Verzeichnis existiert
+    if [[ ! -d "$INSTALL_DIR/docker/production" ]]; then
+        log_warning "Production-Verzeichnis existiert nicht: $INSTALL_DIR/docker/production"
+        log_info "Erstelle Verzeichnisstruktur..."
+        mkdir -p "$INSTALL_DIR/docker/production"
+        mkdir -p "$INSTALL_DIR/docker/production/logs"
+        mkdir -p "$INSTALL_DIR/docker/production/ssl"
+    fi
+    
     log_info "Start-Skript wird repariert..."
     cat > "$INSTALL_DIR/start.sh" <<'EOL'
 #!/usr/bin/env bash
@@ -1786,9 +1863,14 @@ EOL
     
     log_success "Skripte wurden erfolgreich repariert."
     
-    # Auch die Image-Tags reparieren
-    log_info "Image-Tags werden auch repariert..."
-    fix_image_tags
+    # Auch die Image-Tags reparieren, aber nur wenn .env existiert
+    if [[ -f "$INSTALL_DIR/docker/production/.env" ]]; then
+        log_info "Image-Tags werden auch repariert..."
+        fix_image_tags
+    else
+        log_warning ".env-Datei nicht gefunden, Image-Tags können nicht repariert werden."
+        log_info "Verwenden Sie Option 5 'Nötige Verzeichnisse erstellen', um eine .env-Datei zu erstellen."
+    fi
 }
 
 fix_image_tags() {
@@ -1827,6 +1909,17 @@ pull_images() {
     
     log_info "Docker-Images werden manuell heruntergeladen..."
     
+    # Prüfe, ob Docker verfügbar ist
+    if ! command -v docker &> /dev/null; then
+        log_error "Docker ist nicht installiert. Bitte installieren Sie Docker zuerst."
+        echo -e "${YELLOW}Möchten Sie die Abhängigkeiten jetzt prüfen? (j/N)${RESET}"
+        read -rp "> " check_deps
+        if [[ "$check_deps" =~ ^[jJ]$ ]]; then
+            check_dependencies
+        fi
+        return 1
+    fi
+    
     # Bekannte korrekte Image-Pfade
     BACKEND_IMAGE="ghcr.io/kormit-panel/kormit/kormit-backend:main"
     FRONTEND_IMAGE="ghcr.io/kormit-panel/kormit/kormit-frontend:main"
@@ -1842,6 +1935,22 @@ pull_images() {
         log_success "Frontend-Image erfolgreich heruntergeladen: $FRONTEND_IMAGE"
     else
         log_error "Konnte Frontend-Image nicht herunterladen: $FRONTEND_IMAGE"
+    fi
+    
+    # Stelle sicher, dass das Installationsverzeichnis existiert
+    if [[ ! -d "$INSTALL_DIR" ]]; then
+        log_warning "Installationsverzeichnis existiert nicht: $INSTALL_DIR"
+        log_info "Erstelle Verzeichnis..."
+        mkdir -p "$INSTALL_DIR"
+    fi
+    
+    # Stelle sicher, dass das Production-Verzeichnis existiert
+    if [[ ! -d "$INSTALL_DIR/docker/production" ]]; then
+        log_warning "Production-Verzeichnis existiert nicht: $INSTALL_DIR/docker/production"
+        log_info "Erstelle Verzeichnisstruktur..."
+        mkdir -p "$INSTALL_DIR/docker/production"
+        mkdir -p "$INSTALL_DIR/docker/production/logs"
+        mkdir -p "$INSTALL_DIR/docker/production/ssl"
     fi
     
     # .env-Datei aktualisieren
@@ -1862,11 +1971,9 @@ pull_images() {
         log_warning ".env-Datei nicht gefunden: $ENV_FILE"
         log_info "Es wird eine neue .env-Datei erstellt..."
         
-        mkdir -p "$INSTALL_DIR/docker/production"
-        
-        # Zufällige Passwörter generieren
-        DB_PASSWORD=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | fold -w 16 | head -n 1)
-        SECRET_KEY=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | fold -w 32 | head -n 1)
+        # Zufällige Passwörter generieren - mit Fallback
+        DB_PASSWORD=$(tr -dc 'a-zA-Z0-9' < /dev/urandom 2>/dev/null | fold -w 16 | head -n 1 || echo "kormit_default_pass_$(date +%s)")
+        SECRET_KEY=$(tr -dc 'a-zA-Z0-9' < /dev/urandom 2>/dev/null | fold -w 32 | head -n 1 || echo "kormit_default_key_$(date +%s)")
         
         # Neue .env-Datei erstellen
         cat > "$ENV_FILE" << EOL
@@ -1890,8 +1997,16 @@ EOL
         log_success "Neue .env-Datei wurde erstellt."
     fi
     
+    # Stelle sicher, dass die Start-Skripte existieren
+    if [[ ! -f "$INSTALL_DIR/start.sh" || ! -f "$INSTALL_DIR/stop.sh" || ! -f "$INSTALL_DIR/update.sh" ]]; then
+        log_warning "Management-Skripte fehlen."
+        log_info "Erstelle Management-Skripte..."
+        repair_scripts
+    fi
+    
     # Fragen, ob die Container neu gestartet werden sollen
-    read -rp "Möchten Sie die Container mit den korrekten Images neu starten? (J/n): " restart
+    echo -e "${YELLOW}Möchten Sie die Container mit den korrekten Images jetzt starten? (J/n):${RESET}"
+    read -rp "> " restart
     if [[ ! "$restart" =~ ^[nN]$ ]]; then
         restart_kormit
     fi
@@ -1900,14 +2015,30 @@ EOL
 repair_installation() {
     print_header "Installation wird repariert"
     
+    # Prüfe, ob Kormit überhaupt installiert ist
+    if [[ ! -d "$INSTALL_DIR" ]]; then
+        log_error "Keine Installation in $INSTALL_DIR gefunden."
+        echo -e "${YELLOW}Möchten Sie Kormit neu installieren? (j/N)${RESET}"
+        read -rp "> " reinstall_choice
+        if [[ "$reinstall_choice" =~ ^[jJ]$ ]]; then
+            # Verzeichnis erstellen und neu installieren
+            mkdir -p "$INSTALL_DIR"
+            install_kormit
+            return
+        else
+            return
+        fi
+    fi
+    
     echo -e "${YELLOW}Bitte wählen Sie eine Reparaturoption:${RESET}"
     echo -e "1) ${BOLD}Nur Skripte reparieren${RESET} - Start-, Stop- und Update-Skripte"
     echo -e "2) ${BOLD}Image-Tags korrigieren${RESET} - Falsche Tags in der .env-Datei beheben"
     echo -e "3) ${BOLD}Images manuell ziehen${RESET} - Korrekte Docker-Images herunterladen"
     echo -e "4) ${BOLD}Komplette Reparatur${RESET} - Alle oben genannten Optionen ausführen"
+    echo -e "5) ${BOLD}Nötige Verzeichnisse erstellen${RESET} - Fehlende Verzeichnisse anlegen"
     echo -e "0) ${BOLD}Zurück${RESET} - Zum Hauptmenü zurückkehren"
     
-    read -rp "Option (0-4): " repair_option
+    read -rp "Option (0-5): " repair_option
     
     case $repair_option in
         1)
@@ -1922,6 +2053,9 @@ repair_installation() {
         4)
             repair_scripts
             pull_images
+            ;;
+        5)
+            create_missing_directories
             ;;
         0)
             return
@@ -2509,6 +2643,79 @@ backup_database() {
     BACKUP_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
     log_info "Backup-Größe: $BACKUP_SIZE"
    
+    return 0
+}
+
+# Funktion zum Erstellen der benötigten Verzeichnisse
+create_missing_directories() {
+    print_header "Fehlende Verzeichnisse werden erstellt"
+    
+    # Hauptverzeichnisse
+    log_info "Erstelle Hauptverzeichnisse..."
+    mkdir -p "$INSTALL_DIR"
+    
+    # Docker-Verzeichnisse
+    log_info "Erstelle Docker-Verzeichnisse..."
+    mkdir -p "$INSTALL_DIR/docker/production"
+    mkdir -p "$INSTALL_DIR/docker/production/logs"
+    mkdir -p "$INSTALL_DIR/docker/production/ssl"
+    
+    # Prüfe, ob alle Verzeichnisse erstellt wurden
+    if [[ -d "$INSTALL_DIR/docker/production" ]] && [[ -d "$INSTALL_DIR/docker/production/logs" ]] && [[ -d "$INSTALL_DIR/docker/production/ssl" ]]; then
+        log_success "Alle Verzeichnisse wurden erfolgreich erstellt."
+    else
+        log_error "Es gab Probleme beim Erstellen der Verzeichnisse."
+        return 1
+    fi
+    
+    # Erstelle leere .env-Datei, falls nicht vorhanden
+    if [[ ! -f "$INSTALL_DIR/docker/production/.env" ]]; then
+        log_info "Erstelle Standard-.env-Datei..."
+        
+        # Generiere zufällige Passwörter
+        DB_PASSWORD=$(tr -dc 'a-zA-Z0-9' < /dev/urandom 2>/dev/null | fold -w 16 | head -n 1 || echo "kormit_default_pass_$(date +%s)")
+        SECRET_KEY=$(tr -dc 'a-zA-Z0-9' < /dev/urandom 2>/dev/null | fold -w 32 | head -n 1 || echo "kormit_default_key_$(date +%s)")
+        
+        # Bekannte korrekte Image-Pfade
+        BACKEND_IMAGE="ghcr.io/kormit-panel/kormit/kormit-backend:main"
+        FRONTEND_IMAGE="ghcr.io/kormit-panel/kormit/kormit-frontend:main"
+        
+        # Erstelle .env-Datei
+        cat > "$INSTALL_DIR/docker/production/.env" << EOL
+# Kormit-Konfiguration
+DB_USER=kormit_user
+DB_PASSWORD=${DB_PASSWORD}
+DB_NAME=kormit
+SECRET_KEY=${SECRET_KEY}
+DOMAIN_NAME=localhost
+TIMEZONE=UTC
+VOLUME_PREFIX=kormit
+NETWORK_NAME=kormit-network
+HTTP_PORT=80
+HTTPS_PORT=443
+
+# Image-Konfiguration
+BACKEND_IMAGE=${BACKEND_IMAGE}
+FRONTEND_IMAGE=${FRONTEND_IMAGE}
+EOL
+        if [[ -f "$INSTALL_DIR/docker/production/.env" ]]; then
+            log_success ".env-Datei wurde erstellt."
+        else
+            log_error "Konnte .env-Datei nicht erstellen."
+        fi
+    fi
+    
+    # Repariere Skripte
+    log_info "Erstelle Management-Skripte..."
+    repair_scripts
+    
+    # Nächste Schritte
+    log_success "Grundlegende Verzeichnisstruktur wurde erstellt."
+    log_info "Als nächstes können Sie:"
+    log_info "1. Docker-Images mit Option 3 herunterladen"
+    log_info "2. Kormit mit Option 4 im Hauptmenü starten"
+    
+    press_enter_to_continue
     return 0
 }
 
