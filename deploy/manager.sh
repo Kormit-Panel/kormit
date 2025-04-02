@@ -1,7 +1,7 @@
 #!/bin/bash
-# Kormit Management Script
+# Kormit Management Script v2.0
 # Ein modernes Tool zur Installation und Verwaltung von Kormit
-# Version 1.1.0 - Mit Image-Tag-Fix und erweiterten Reparaturfunktionen
+# Version 2.0.0 - Komplette Überarbeitung mit verbesserter Benutzerfreundlichkeit
 
 # Farbdefinitionen für ein modernes Interface
 RESET="\033[0m"
@@ -37,14 +37,45 @@ REPO_URL="https://github.com/kormit-panel/kormit.git"
 DEFAULT_INSTALL_DIR="/opt/kormit"
 INSTALL_DIR="${INSTALL_DIR:-$DEFAULT_INSTALL_DIR}"
 TMP_DIR="/tmp/kormit-install"
+CONFIG_FILE="$HOME/.kormit_config"
 
 # Globale Variablen
-VERSION="1.1.0"
+VERSION="2.0.0"
 DOMAIN_NAME="localhost"
 HTTP_PORT="80"
 HTTPS_PORT="443"
-USE_HTTPS=true
+USE_HTTPS=false # Standard: HTTP-only für einfachere Installation
 DEBUG=false
+ANIMATION_ENABLED=true
+AUTO_UPDATE_CHECK=true
+LAST_CHECK_TIME=0
+
+# Aktiviere Autovervollständigung für die Shell
+# Lese vorherige Konfiguration, falls vorhanden
+load_config() {
+    if [ -f "$CONFIG_FILE" ]; then
+        log_debug "Lade Konfiguration aus $CONFIG_FILE"
+        source "$CONFIG_FILE"
+    fi
+}
+
+# Speichere aktuelle Konfiguration
+save_config() {
+    log_debug "Speichere Konfiguration in $CONFIG_FILE"
+    cat > "$CONFIG_FILE" << EOL
+# Kormit Manager Konfigurationsdatei
+# Automatisch generiert - Manuelle Änderungen werden überschrieben
+INSTALL_DIR="$INSTALL_DIR"
+DOMAIN_NAME="$DOMAIN_NAME"
+HTTP_PORT="$HTTP_PORT"
+HTTPS_PORT="$HTTPS_PORT"
+USE_HTTPS=$USE_HTTPS
+DEBUG=$DEBUG
+ANIMATION_ENABLED=$ANIMATION_ENABLED
+AUTO_UPDATE_CHECK=$AUTO_UPDATE_CHECK
+LAST_CHECK_TIME=$LAST_CHECK_TIME
+EOL
+}
 
 # Überprüfen, ob das Skript als Root ausgeführt wird
 check_root() {
@@ -57,74 +88,259 @@ check_root() {
 
 # Ausgabe-Funktionen
 print_logo() {
-    echo -e "${CYAN}${BOLD}"
-    echo "╔════════════════════════════════════════════════════════════════╗"
-    echo "║                                                                ║"
-    echo "║   ██╗  ██╗ ██████╗ ██████╗ ███╗   ███╗██╗████████╗            ║"
-    echo "║   ██║ ██╔╝██╔═══██╗██╔══██╗████╗ ████║██║╚══██╔══╝            ║"
-    echo "║   █████╔╝ ██║   ██║██████╔╝██╔████╔██║██║   ██║               ║"
-    echo "║   ██╔═██╗ ██║   ██║██╔══██╗██║╚██╔╝██║██║   ██║               ║"
-    echo "║   ██║  ██╗╚██████╔╝██║  ██║██║ ╚═╝ ██║██║   ██║               ║"
-    echo "║   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝╚═╝   ╚═╝               ║"
-    echo "║                                                                ║"
-    echo "╠════════════════════════════════════════════════════════════════╣"
-    echo "║                Management Tool v${VERSION}                         ║"
-    echo "╚════════════════════════════════════════════════════════════════╝"
-    echo -e "${RESET}"
+    if [ "$ANIMATION_ENABLED" = true ]; then
+        clear
+        # Animiertes Logo
+        echo -e "${CYAN}${BOLD}"
+        echo "╔════════════════════════════════════════════════════════════════╗"
+        echo "║                                                                ║"
+        sleep 0.05
+        echo "║   ██╗  ██╗ ██████╗ ██████╗ ███╗   ███╗██╗████████╗            ║"
+        sleep 0.05
+        echo "║   ██║ ██╔╝██╔═══██╗██╔══██╗████╗ ████║██║╚══██╔══╝            ║"
+        sleep 0.05
+        echo "║   █████╔╝ ██║   ██║██████╔╝██╔████╔██║██║   ██║               ║"
+        sleep 0.05
+        echo "║   ██╔═██╗ ██║   ██║██╔══██╗██║╚██╔╝██║██║   ██║               ║"
+        sleep 0.05
+        echo "║   ██║  ██╗╚██████╔╝██║  ██║██║ ╚═╝ ██║██║   ██║               ║"
+        sleep 0.05
+        echo "║   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝╚═╝   ╚═╝               ║"
+        sleep 0.05
+        echo "║                                                                ║"
+        echo "╠════════════════════════════════════════════════════════════════╣"
+        sleep 0.05
+        echo -e "║            ${GREEN}Management Tool v${VERSION}${CYAN} - ${MAGENTA}ProEdition${CYAN}              ║"
+        echo "╚════════════════════════════════════════════════════════════════╝"
+        echo -e "${RESET}"
+    else
+        # Statisches Logo für Server ohne Animation
+        clear
+        echo -e "${CYAN}${BOLD}"
+        echo "╔════════════════════════════════════════════════════════════════╗"
+        echo "║                                                                ║"
+        echo "║   ██╗  ██╗ ██████╗ ██████╗ ███╗   ███╗██╗████████╗            ║"
+        echo "║   ██║ ██╔╝██╔═══██╗██╔══██╗████╗ ████║██║╚══██╔══╝            ║"
+        echo "║   █████╔╝ ██║   ██║██████╔╝██╔████╔██║██║   ██║               ║"
+        echo "║   ██╔═██╗ ██║   ██║██╔══██╗██║╚██╔╝██║██║   ██║               ║"
+        echo "║   ██║  ██╗╚██████╔╝██║  ██║██║ ╚═╝ ██║██║   ██║               ║"
+        echo "║   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝╚═╝   ╚═╝               ║"
+        echo "║                                                                ║"
+        echo "╠════════════════════════════════════════════════════════════════╣"
+        echo -e "║            ${GREEN}Management Tool v${VERSION}${CYAN} - ${MAGENTA}ProEdition${CYAN}              ║"
+        echo "╚════════════════════════════════════════════════════════════════╝"
+        echo -e "${RESET}"
+    fi
 }
 
 print_header() {
     local title="$1"
-    echo -e "${BLUE}${BOLD}▶ ${title} ${RESET}"
-    echo -e "${BLUE}  $(printf '═%.0s' {1..50})${RESET}"
+    echo -e "\n${BLUE}${BOLD}▶ ${title} ${RESET}"
+    echo -e "${BLUE}  $(printf '═%.0s' {1..60})${RESET}"
 }
 
 log_info() {
-    echo -e "${CYAN}ℹ️  ${RESET}$1"
+    echo -e "${CYAN}${BOLD}[ℹ️] ${RESET}$1"
 }
 
 log_success() {
-    echo -e "${GREEN}✅ ${RESET}$1"
+    echo -e "${GREEN}${BOLD}[✅] ${RESET}$1"
 }
 
 log_warning() {
-    echo -e "${YELLOW}⚠️  ${RESET}$1"
+    echo -e "${YELLOW}${BOLD}[⚠️] ${RESET}$1"
 }
 
 log_error() {
-    echo -e "${RED}❌ ${RESET}$1"
+    echo -e "${RED}${BOLD}[❌] ${RESET}$1"
 }
 
 log_debug() {
     if [ "$DEBUG" = true ]; then
-        echo -e "${DIM}🔍 [DEBUG] ${RESET}$1"
+        echo -e "${DIM}[🔍] ${RESET}$1"
     fi
 }
 
-# Spinners für lange Operationen
+# Fortschrittsbalken für lange Operationen
+progress_bar() {
+    local duration=$1
+    local prefix=$2
+    local size=40
+    local char="▓"
+    local empty="░"
+    
+    if [ "$ANIMATION_ENABLED" = false ]; then
+        echo -e "${prefix} - Wird ausgeführt..."
+        sleep "$duration"
+        return
+    fi
+    
+    for i in $(seq 0 $size); do
+        local pct=$((i * 100 / size))
+        local progress=""
+        local remaining=""
+        
+        for j in $(seq 0 $i); do
+            progress="${progress}${char}"
+        done
+        
+        for j in $(seq $((i + 1)) $size); do
+            remaining="${remaining}${empty}"
+        done
+        
+        sleep $(echo "$duration/$size" | bc -l)
+        
+        echo -ne "\r${prefix} [${progress}${remaining}] ${pct}%"
+    done
+    echo -e "\r${prefix} [$(printf "%${size}s" | tr ' ' "$char")] 100% ${GREEN}✓${RESET}"
+}
+
+# Verbesserte Spinner für lange Operationen
 spinner() {
     local pid=$1
+    local message=$2
     local delay=0.1
-    local spinstr='|/-\'
-    while ps -p $pid > /dev/null; do
+    local spinstr='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    
+    if [ "$ANIMATION_ENABLED" = false ]; then
+        echo -e "${message} - Wird ausgeführt..."
+        wait $pid
+        return
+    fi
+    
+    echo -n "${message} "
+    while kill -0 $pid 2>/dev/null; do
         local temp=${spinstr#?}
-        printf " [%c]  " "$spinstr"
+        printf "${CYAN}%c${RESET}" "$spinstr"
         local spinstr=$temp${spinstr%"$temp"}
         sleep $delay
-        printf "\b\b\b\b\b\b"
+        printf "\b"
     done
-    printf "    \b\b\b\b"
+    
+    wait $pid
+    local exit_status=$?
+    
+    if [ $exit_status -eq 0 ]; then
+        echo -e "${GREEN}✓${RESET}"
+    else
+        echo -e "${RED}✗${RESET}"
+        return $exit_status
+    fi
+}
+
+# Funktion zum Ausführen von Befehlen mit einem Spinner
+run_with_spinner() {
+    local cmd="$1"
+    local msg="$2"
+    
+    log_debug "Führe aus: $cmd"
+    
+    eval "$cmd" > /dev/null 2>&1 &
+    spinner $! "${BOLD}${msg}${RESET}"
+    
+    return $?
+}
+
+# Funktion zum Ausführen von Befehlen mit einem Fortschrittsbalken
+run_with_progress() {
+    local cmd="$1"
+    local msg="$2"
+    local time="$3"
+    
+    log_debug "Führe aus: $cmd"
+    
+    eval "$cmd" > /dev/null 2>&1 &
+    local pid=$!
+    
+    progress_bar "$time" "${BOLD}${msg}${RESET}"
+    
+    wait $pid
+    return $?
+}
+
+# Prüfen, ob Updates für das Skript verfügbar sind
+check_for_updates() {
+    if [ "$AUTO_UPDATE_CHECK" = false ]; then
+        return
+    fi
+    
+    # Prüfe nur einmal täglich
+    local current_time=$(date +%s)
+    local one_day=86400
+    
+    if [ $((current_time - LAST_CHECK_TIME)) -lt $one_day ]; then
+        log_debug "Letzter Update-Check war vor weniger als einem Tag - überspringe"
+        return
+    fi
+    
+    log_debug "Prüfe auf Updates für den Kormit Manager..."
+    
+    run_with_spinner "git ls-remote --tags $REPO_URL | grep -o 'refs/tags/v[0-9]*\.[0-9]*\.[0-9]*' | sort -V | tail -n 1 | cut -d'/' -f3 > /tmp/kormit_latest" "Prüfe auf Updates"
+    
+    if [ -f /tmp/kormit_latest ]; then
+        local latest_version=$(cat /tmp/kormit_latest)
+        rm /tmp/kormit_latest
+        
+        if [ "v$VERSION" != "$latest_version" ]; then
+            log_warning "Eine neue Version des Kormit Managers ist verfügbar: ${YELLOW}${latest_version}${RESET} (aktuell: v${VERSION})"
+            echo -e "Möchten Sie den Manager aktualisieren? (j/N): "
+            read -p "> " update_choice
+            
+            if [[ "$update_choice" =~ ^[jJ]$ ]]; then
+                update_manager
+            fi
+        else
+            log_debug "Der Kormit Manager ist aktuell (v${VERSION})"
+        fi
+    fi
+    
+    LAST_CHECK_TIME=$current_time
+    save_config
+}
+
+# Update des Manager-Skripts
+update_manager() {
+    print_header "Manager-Update"
+    
+    log_info "Hole die neueste Version des Kormit Managers..."
+    
+    # Temporäres Verzeichnis erstellen
+    TMP_UPDATE_DIR="/tmp/kormit-manager-update"
+    mkdir -p "$TMP_UPDATE_DIR"
+    
+    # Repository klonen
+    if run_with_spinner "git clone --depth 1 $REPO_URL $TMP_UPDATE_DIR" "Repository wird geklont"; then
+        # Backup des aktuellen Skripts
+        cp "$0" "$0.backup"
+        
+        # Manager-Skript ersetzen
+        if cp "$TMP_UPDATE_DIR/deploy/manager.sh" "$0"; then
+            chmod +x "$0"
+            log_success "Der Kormit Manager wurde aktualisiert. Starte neu..."
+            # Altes Temporärverzeichnis aufräumen
+            rm -rf "$TMP_UPDATE_DIR"
+            # Skript neu starten
+            exec "$0" "$@"
+        else
+            log_error "Fehler beim Aktualisieren des Managers."
+            log_info "Backup wiederhergestellt: $0.backup"
+        fi
+    else
+        log_error "Fehler beim Klonen des Repositories."
+        log_info "Der Manager wurde nicht aktualisiert."
+        rm -rf "$TMP_UPDATE_DIR"
+    fi
 }
 
 # Systemprüfung und Voraussetzungen
 detect_os() {
-    log_info "Betriebssystem wird erkannt..."
+    run_with_spinner "sleep 1" "Betriebssystem wird erkannt"
     
     if [ -f /etc/os-release ]; then
         . /etc/os-release
         OS=$ID
         VERSION_ID=$VERSION_ID
-        log_info "Erkanntes Betriebssystem: ${BOLD}$OS $VERSION_ID${RESET}"
+        log_success "Erkanntes Betriebssystem: ${BOLD}$OS $VERSION_ID${RESET}"
     else
         log_error "Betriebssystem konnte nicht erkannt werden."
         exit 1
@@ -134,55 +350,110 @@ detect_os() {
 check_dependencies() {
     print_header "Abhängigkeiten werden überprüft"
     
-    # Git überprüfen
-    if command -v git &> /dev/null; then
-        log_success "Git ist installiert: $(git --version)"
-    else
-        log_warning "Git ist nicht installiert und wird benötigt."
-        install_git
-    fi
+    # Systemvoraussetzungen als Array
+    local dependencies=(
+        "git:Git ist erforderlich für das Herunterladen des Codes:install_git"
+        "docker:Docker ist erforderlich für die Container-Virtualisierung:install_docker"
+        "docker-compose:Docker Compose oder das Plugin ist erforderlich für die Container-Orchestrierung:install_docker_compose"
+        "curl:Curl ist für Downloads und API-Aufrufe erforderlich:install_curl"
+    )
     
-    # Docker überprüfen
-    if command -v docker &> /dev/null; then
-        log_success "Docker ist installiert: $(docker --version)"
-    else
-        log_warning "Docker ist nicht installiert und wird benötigt."
-        install_docker
-    fi
+    local all_passed=true
     
-    # Docker Compose überprüfen
-    if docker compose version &> /dev/null; then
-        log_success "Docker Compose Plugin ist installiert."
-    elif command -v docker-compose &> /dev/null; then
-        log_success "Docker Compose Legacy ist installiert."
+    for dep in "${dependencies[@]}"; do
+        # Aufteilung des Strings in Command, Nachricht und Installationsfunktion
+        IFS=':' read -r cmd msg install_func <<< "$dep"
+        
+        # Prüfe Docker Compose auch als Plugin
+        if [ "$cmd" = "docker-compose" ] && docker compose version &> /dev/null; then
+            log_success "Docker Compose Plugin ist installiert"
+            continue
+        fi
+        
+        # Prüfe, ob der Befehl verfügbar ist
+        if command -v "$cmd" &> /dev/null; then
+            case "$cmd" in
+                git)
+                    log_success "Git ist installiert: $(git --version | head -n 1)"
+                    ;;
+                docker)
+                    log_success "Docker ist installiert: $(docker --version | head -n 1)"
+                    if ! docker info &> /dev/null; then
+                        log_warning "Docker ist installiert, aber der Docker-Daemon ist nicht aktiv"
+                        log_info "Versuche den Docker-Dienst zu starten..."
+                        if systemctl start docker &> /dev/null; then
+                            log_success "Docker-Dienst erfolgreich gestartet"
+                        else
+                            log_error "Konnte den Docker-Dienst nicht starten. Bitte manuell starten."
+                            all_passed=false
+                        fi
+                    fi
+                    ;;
+                docker-compose)
+                    log_success "Docker Compose Legacy ist installiert: $(docker-compose --version | head -n 1)"
+                    ;;
+                *)
+                    log_success "$cmd ist installiert"
+                    ;;
+            esac
+        else
+            log_warning "$msg"
+            
+            # Frage, ob die Abhängigkeit installiert werden soll
+            echo -e "Möchten Sie $cmd jetzt installieren? (J/n): "
+            read -p "> " install_choice
+            
+            if [[ ! "$install_choice" =~ ^[nN]$ ]]; then
+                # Rufe die Installationsfunktion auf
+                if declare -F "$install_func" > /dev/null; then
+                    "$install_func"
+                    if command -v "$cmd" &> /dev/null; then
+                        log_success "$cmd wurde erfolgreich installiert"
+                    else
+                        log_error "$cmd konnte nicht installiert werden"
+                        all_passed=false
+                    fi
+                else
+                    log_error "Installationsfunktion für $cmd nicht gefunden"
+                    all_passed=false
+                fi
+            else
+                log_warning "$cmd wird für den ordnungsgemäßen Betrieb benötigt"
+                all_passed=false
+            fi
+        fi
+    done
+    
+    if [ "$all_passed" = true ]; then
+        log_success "Alle Abhängigkeiten sind erfüllt! 🚀"
+        return 0
     else
-        log_warning "Docker Compose ist nicht installiert und wird benötigt."
-        install_docker_compose
+        log_warning "Einige Abhängigkeiten fehlen. Einige Funktionen könnten eingeschränkt sein."
+        return 1
     fi
 }
 
 install_git() {
     log_info "Git wird installiert..."
     
-    case $OS in
+    run_with_spinner "case $OS in
         ubuntu|debian)
-            apt update
-            apt install -y git
+            apt update && apt install -y git
             ;;
         centos|rhel|fedora)
             yum install -y git
             ;;
+        alpine)
+            apk add --no-cache git
+            ;;
         *)
-            log_error "Nicht unterstütztes Betriebssystem für die Git-Installation."
             exit 1
             ;;
-    esac
+    esac" "Git wird installiert"
     
-    if command -v git &> /dev/null; then
-        log_success "Git wurde erfolgreich installiert: $(git --version)"
-    else
-        log_error "Git konnte nicht installiert werden."
-        exit 1
+    if [ $? -ne 0 ]; then
+        log_error "Git-Installation fehlgeschlagen. Bitte manuell installieren."
+        return 1
     fi
 }
 
@@ -191,59 +462,111 @@ install_docker() {
     
     case $OS in
         ubuntu|debian)
-            apt update
-            apt install -y apt-transport-https ca-certificates curl software-properties-common gnupg
-            curl -fsSL https://download.docker.com/linux/$OS/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/$OS $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-            apt update
-            apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+            run_with_spinner "apt update && apt install -y apt-transport-https ca-certificates curl software-properties-common gnupg" "Abhängigkeiten werden installiert"
+            run_with_spinner "curl -fsSL https://download.docker.com/linux/$OS/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg" "Repository-Schlüssel werden heruntergeladen"
+            run_with_spinner "echo \"deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/$OS $(lsb_release -cs) stable\" | tee /etc/apt/sources.list.d/docker.list > /dev/null" "Repository wird hinzugefügt"
+            run_with_spinner "apt update && apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin" "Docker wird installiert"
+            run_with_spinner "systemctl start docker && systemctl enable docker" "Docker-Dienst wird aktiviert"
             ;;
         centos|rhel|fedora)
-            yum install -y yum-utils
-            yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-            yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-            systemctl start docker
-            systemctl enable docker
+            run_with_spinner "yum install -y yum-utils" "Abhängigkeiten werden installiert"
+            run_with_spinner "yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo" "Repository wird hinzugefügt"
+            run_with_spinner "yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin" "Docker wird installiert"
+            run_with_spinner "systemctl start docker && systemctl enable docker" "Docker-Dienst wird aktiviert"
+            ;;
+        alpine)
+            run_with_spinner "apk add --no-cache docker docker-compose" "Docker wird installiert"
+            run_with_spinner "service docker start" "Docker-Dienst wird gestartet"
             ;;
         *)
             log_error "Nicht unterstütztes Betriebssystem für die Docker-Installation."
-            exit 1
+            return 1
             ;;
     esac
     
+    # Prüfen, ob Docker erfolgreich installiert wurde
     if command -v docker &> /dev/null; then
         log_success "Docker wurde erfolgreich installiert: $(docker --version)"
+        
+        # Füge den aktuellen Benutzer zur docker-Gruppe hinzu, falls nicht root
+        if [ "$(id -u)" -ne 0 ]; then
+            log_info "Füge den Benutzer $(whoami) zur docker-Gruppe hinzu..."
+            if getent group docker &> /dev/null; then
+                usermod -aG docker $(whoami)
+                log_info "Benutzer wurde zur docker-Gruppe hinzugefügt. Ein Neustart der Shell könnte erforderlich sein."
+            else
+                log_warning "Docker-Gruppe existiert nicht - könnte Probleme verursachen."
+            fi
+        fi
+        
+        return 0
     else
         log_error "Docker konnte nicht installiert werden."
-        exit 1
+        return 1
     fi
 }
 
 install_docker_compose() {
-    log_info "Docker Compose wird installiert..."
-    
+    # Prüfen, ob Docker Compose bereits als Plugin installiert ist
     if docker compose version &> /dev/null; then
         log_success "Docker Compose Plugin ist bereits installiert."
-        return
+        return 0
     fi
     
+    # Prüfen, ob Docker Compose Legacy bereits installiert ist
     if command -v docker-compose &> /dev/null; then
         log_success "Docker Compose Legacy ist bereits installiert."
-        return
+        return 0
     fi
     
+    log_info "Docker Compose wird installiert..."
+    
+    # Neueste Version ermitteln
     COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
     
-    mkdir -p /usr/local/lib/docker/cli-plugins
-    curl -SL "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/lib/docker/cli-plugins/docker-compose
-    chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
-    ln -sf /usr/local/lib/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
+    if [ -z "$COMPOSE_VERSION" ]; then
+        log_warning "Konnte die neueste Docker Compose-Version nicht ermitteln. Verwende Standardversion."
+        COMPOSE_VERSION="v2.18.1"
+    fi
     
+    run_with_spinner "
+        mkdir -p /usr/local/lib/docker/cli-plugins
+        curl -SL \"https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/lib/docker/cli-plugins/docker-compose
+        chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+        ln -sf /usr/local/lib/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
+    " "Docker Compose wird installiert"
+    
+    # Prüfen, ob die Installation erfolgreich war
     if docker compose version &> /dev/null || command -v docker-compose &> /dev/null; then
         log_success "Docker Compose wurde erfolgreich installiert."
+        return 0
     else
         log_error "Docker Compose konnte nicht installiert werden."
-        exit 1
+        return 1
+    fi
+}
+
+install_curl() {
+    log_info "Curl wird installiert..."
+    
+    run_with_spinner "case $OS in
+        ubuntu|debian)
+            apt update && apt install -y curl
+            ;;
+        centos|rhel|fedora)
+            yum install -y curl
+            ;;
+        alpine)
+            apk add --no-cache curl
+            ;;
+        *)
+            exit 1
+            ;;
+    esac" "Curl wird installiert"
+    
+    if [ $? -ne 0 ]; then
+        log_error "Curl-Installation fehlgeschlagen. Bitte manuell installieren."
+        return 1
     fi
 }
 
@@ -259,12 +582,21 @@ clone_repository() {
     
     # Repository klonen
     log_info "Kormit Repository wird geklont..."
+    
     mkdir -p "$TMP_DIR"
-    if git clone "$REPO_URL" "$TMP_DIR"; then
+    
+    if run_with_spinner "git clone --depth 1 $REPO_URL $TMP_DIR" "Kormit Repository wird geklont"; then
         log_success "Repository wurde erfolgreich geklont."
+        return 0
     else
         log_error "Repository konnte nicht geklont werden."
-        exit 1
+        
+        # Prüfen, ob es ein Netzwerkproblem ist
+        if ! curl -s --head https://github.com | grep "HTTP/" > /dev/null; then
+            log_error "Netzwerkverbindung zu GitHub fehlgeschlagen. Bitte überprüfen Sie Ihre Internetverbindung."
+        fi
+        
+        return 1
     fi
 }
 
@@ -273,18 +605,47 @@ update_repository() {
     
     # Prüfen, ob TMP_DIR existiert
     if [ ! -d "$TMP_DIR" ]; then
+        log_info "Temporäres Verzeichnis nicht gefunden, Repository wird frisch geklont..."
         clone_repository
-        return
+        return $?
     fi
     
     # Repository aktualisieren
     log_info "Kormit Repository wird aktualisiert..."
+    
     cd "$TMP_DIR"
-    if git pull; then
+    
+    # Prüfen, ob es sich um ein Git-Repository handelt
+    if [ ! -d ".git" ]; then
+        log_warning "Das Verzeichnis $TMP_DIR ist kein Git-Repository."
+        log_info "Repository wird neu geklont..."
+        cd - > /dev/null
+        clone_repository
+        return $?
+    fi
+    
+    if run_with_spinner "git pull" "Repository wird aktualisiert"; then
         log_success "Repository wurde erfolgreich aktualisiert."
+        cd - > /dev/null
+        return 0
     else
         log_error "Repository konnte nicht aktualisiert werden."
-        exit 1
+        
+        # Versuche, lokale Änderungen zu verwerfen
+        log_info "Versuche, lokale Änderungen zurückzusetzen..."
+        if run_with_spinner "git reset --hard && git clean -fd && git pull" "Repository wird zurückgesetzt"; then
+            log_success "Repository wurde erfolgreich zurückgesetzt und aktualisiert."
+            cd - > /dev/null
+            return 0
+        else
+            log_error "Repository konnte nicht zurückgesetzt werden."
+            cd - > /dev/null
+            
+            # Als letzten Ausweg neu klonen
+            log_info "Versuche, Repository neu zu klonen..."
+            clone_repository
+            return $?
+        fi
     fi
 }
 
@@ -293,8 +654,11 @@ install_kormit() {
     print_header "Kormit wird installiert"
     
     # Repository klonen, falls noch nicht geschehen
-    if [ ! -d "$TMP_DIR" ]; then
-        clone_repository
+    if [ ! -d "$TMP_DIR" ] || [ ! -d "$TMP_DIR/.git" ]; then
+        if ! clone_repository; then
+            log_error "Installation kann nicht fortgesetzt werden, da das Repository nicht geklont werden konnte."
+            return 1
+        fi
     fi
     
     # Installationsverzeichnis erstellen
@@ -302,73 +666,436 @@ install_kormit() {
     mkdir -p "$INSTALL_DIR"
     
     # Installationsparameter interaktiv erfragen
-    get_installation_params
+    if ! get_installation_params; then
+        log_warning "Installation wurde abgebrochen."
+        return 1
+    fi
+    
+    # Zeige Zusammenfassung und starte Installation
+    show_installation_summary
+    
+    # Frage nach Bestätigung
+    echo -e "\n${YELLOW}Möchten Sie mit der Installation fortfahren? (J/n)${RESET}"
+    read -p "> " confirm
+    if [[ "$confirm" =~ ^[nN]$ ]]; then
+        log_warning "Installation wurde abgebrochen."
+        return 1
+    fi
     
     # Standard-Installations-Skript ausführen
     log_info "Kormit wird installiert..."
-    log_info "Führe aus: $TMP_DIR/deploy/install.sh --install-dir=$INSTALL_DIR --domain=$DOMAIN_NAME --http-port=$HTTP_PORT --https-port=$HTTPS_PORT"
+    
+    # Erstelle Befehlszeile
+    local cmd="$TMP_DIR/deploy/install.sh --install-dir=$INSTALL_DIR --domain=$DOMAIN_NAME --http-port=$HTTP_PORT --https-port=$HTTPS_PORT"
+    
     if [ "$USE_HTTPS" = true ]; then
-        $TMP_DIR/deploy/install.sh --install-dir=$INSTALL_DIR --domain=$DOMAIN_NAME --http-port=$HTTP_PORT --https-port=$HTTPS_PORT --use-https
+        cmd="$cmd --use-https"
     else
-        $TMP_DIR/deploy/install.sh --install-dir=$INSTALL_DIR --domain=$DOMAIN_NAME --http-port=$HTTP_PORT --https-port=$HTTPS_PORT --http-only
+        cmd="$cmd --http-only"
     fi
+    
+    log_debug "Ausführen: $cmd"
+    
+    # Mache das Skript ausführbar
+    chmod +x "$TMP_DIR/deploy/install.sh"
+    
+    # Führe das Skript aus
+    if ! $cmd; then
+        log_error "Installation fehlgeschlagen. Überprüfen Sie die Fehlermeldungen."
+        
+        # Biete Möglichkeit zur Fehlerdiagnose
+        echo -e "\n${YELLOW}Möchten Sie die detaillierte Fehlerdiagnose starten? (j/N)${RESET}"
+        read -p "> " debug_choice
+        if [[ "$debug_choice" =~ ^[jJ]$ ]]; then
+            run_diagnostics
+        fi
+        
+        return 1
+    fi
+    
+    log_success "Kormit wurde erfolgreich installiert."
+    
+    # Nach der Installation die Image-Tags korrigieren
+    log_info "Korrigiere Image-Tags in der .env-Datei..."
+    fix_image_tags
+    
+    # Zeige Zugriffsinformationen
+    show_access_info
+    
+    # Konfiguration speichern
+    save_config
+    
+    return 0
+}
+
+# Zeigt eine Zusammenfassung der Installationseinstellungen
+show_installation_summary() {
+    print_header "Installationszusammenfassung"
+    
+    echo -e "${BOLD}System:${RESET}"
+    echo -e "  - Betriebssystem: ${CYAN}$OS $VERSION_ID${RESET}"
+    echo -e "  - Hostname: ${CYAN}$(hostname)${RESET}"
+    
+    echo -e "\n${BOLD}Installationskonfiguration:${RESET}"
+    echo -e "  - Verzeichnis: ${CYAN}$INSTALL_DIR${RESET}"
+    echo -e "  - Domain: ${CYAN}$DOMAIN_NAME${RESET}"
+    echo -e "  - HTTP-Port: ${CYAN}$HTTP_PORT${RESET}"
+    
+    if [ "$USE_HTTPS" = true ]; then
+        echo -e "  - HTTPS-Port: ${CYAN}$HTTPS_PORT${RESET}"
+        echo -e "  - SSL: ${GREEN}Aktiviert${RESET} (Selbstsigniertes Zertifikat)"
+    else
+        echo -e "  - SSL: ${YELLOW}Deaktiviert${RESET} (Nur HTTP)"
+    fi
+    
+    # Speicherplatz prüfen
+    local available_space=$(df -h "$INSTALL_DIR" | awk 'NR==2 {print $4}')
+    echo -e "\n${BOLD}Systemvoraussetzungen:${RESET}"
+    echo -e "  - Verfügbarer Speicherplatz: ${CYAN}$available_space${RESET}"
+    echo -e "  - Benötigter Speicherplatz: ${CYAN}~500MB${RESET}"
+    
+    # RAM-Nutzung prüfen
+    local total_ram=$(free -h | awk 'NR==2 {print $2}')
+    echo -e "  - Verfügbarer RAM: ${CYAN}$total_ram${RESET}"
+    echo -e "  - Empfohlener RAM: ${CYAN}≥ 2GB${RESET}"
+}
+
+# Zeigt Zugriffsinformationen nach erfolgreicher Installation
+show_access_info() {
+    print_header "Zugriffsinformationen"
+    
+    # Server-IP oder Domain anzeigen
+    if [ "$DOMAIN_NAME" = "localhost" ]; then
+        # Versuche, die öffentliche IP zu ermitteln
+        local SERVER_IP=$(hostname -I | awk '{print $1}')
+        if [ -z "$SERVER_IP" ]; then
+            SERVER_IP="localhost"
+        fi
+        ACCESS_URL="$SERVER_IP"
+    else
+        ACCESS_URL="$DOMAIN_NAME"
+    fi
+    
+    echo -e "${GREEN}${BOLD}Kormit wurde erfolgreich installiert und ist nun erreichbar unter:${RESET}"
+    
+    if [ "$USE_HTTPS" = true ]; then
+        echo -e "  ${CYAN}${UNDERLINE}https://${ACCESS_URL}:${HTTPS_PORT}${RESET}"
+        
+        # Hinweis für selbstsignierte Zertifikate
+        echo -e "\n${YELLOW}Hinweis: Da ein selbstsigniertes Zertifikat verwendet wird, werden Browser eine Sicherheitswarnung anzeigen.${RESET}"
+        echo -e "${YELLOW}Sie können diese Warnung bestätigen, um fortzufahren.${RESET}"
+    else
+        echo -e "  ${CYAN}${UNDERLINE}http://${ACCESS_URL}:${HTTP_PORT}${RESET}"
+    fi
+    
+    echo -e "\n${BOLD}Management-Befehle:${RESET}"
+    echo -e "  ${GREEN}Starten:${RESET}    $INSTALL_DIR/start.sh"
+    echo -e "  ${RED}Stoppen:${RESET}     $INSTALL_DIR/stop.sh"
+    echo -e "  ${BLUE}Aktualisieren:${RESET} $INSTALL_DIR/update.sh"
+    
+    echo -e "\n${BOLD}Anmeldeinformationen:${RESET}"
+    echo -e "  Das ${BOLD}Admin-Passwort${RESET} finden Sie in der ersten Log-Ausgabe nach dem Start."
+    echo -e "  Verwenden Sie den Befehl: ${CYAN}docker logs \$(docker ps | grep kormit-backend | awk '{print \$1}') | grep -A 1 'Admin-Passwort'${RESET}"
 }
 
 get_installation_params() {
-    echo -e "${CYAN}${BOLD}Installationsparameter konfigurieren:${RESET}"
+    echo -e "\n${CYAN}${BOLD}Installationsparameter konfigurieren:${RESET}"
     echo -e "${DIM}Drücken Sie einfach Enter, um die Standardwerte zu verwenden.${RESET}"
     
-    # Domain-Name
-    read -p "Domain-Name oder IP-Adresse [$DOMAIN_NAME]: " user_domain
-    if [ -n "$user_domain" ]; then
-        DOMAIN_NAME="$user_domain"
-    fi
+    # Domain-Name mit Validierung
+    while true; do
+        read -p "Domain-Name oder IP-Adresse [$DOMAIN_NAME]: " user_domain
+        if [ -n "$user_domain" ]; then
+            # Prüfe, ob es ein gültiger Domainname oder eine IP ist
+            if [[ "$user_domain" =~ ^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$ ]] || [[ "$user_domain" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                DOMAIN_NAME="$user_domain"
+                break
+            else
+                log_error "Ungültiger Domain-Name oder IP-Adresse. Bitte erneut eingeben."
+            fi
+        else
+            break
+        fi
+    done
     
     # HTTPS verwenden?
     if [ "$USE_HTTPS" = true ]; then
         read -p "HTTPS verwenden? (J/n): " use_https
         if [[ "$use_https" =~ ^[nN]$ ]]; then
             USE_HTTPS=false
-            log_info "HTTP-only-Modus aktiviert."
+            log_info "HTTP-only-Modus aktiviert"
         fi
     else
         read -p "HTTPS verwenden? (j/N): " use_https
         if [[ "$use_https" =~ ^[jJ]$ ]]; then
             USE_HTTPS=true
-            log_info "HTTPS-Modus aktiviert."
+            log_info "HTTPS-Modus aktiviert"
+            
+            # Überprüfe, ob OpenSSL installiert ist, falls HTTPS gewählt wurde
+            if ! command -v openssl &> /dev/null; then
+                log_warning "OpenSSL ist für HTTPS erforderlich, aber nicht installiert."
+                echo -e "Möchten Sie OpenSSL jetzt installieren? (J/n): "
+                read -p "> " install_openssl
+                
+                if [[ ! "$install_openssl" =~ ^[nN]$ ]]; then
+                    install_openssl
+                    
+                    if ! command -v openssl &> /dev/null; then
+                        log_error "OpenSSL konnte nicht installiert werden. Fallback auf HTTP-only."
+                        USE_HTTPS=false
+                    fi
+                else
+                    log_warning "HTTPS wurde deaktiviert, da OpenSSL nicht installiert ist."
+                    USE_HTTPS=false
+                fi
+            fi
         fi
     fi
     
-    # HTTP-Port
-    read -p "HTTP-Port [$HTTP_PORT]: " user_http_port
-    if [ -n "$user_http_port" ]; then
-        HTTP_PORT="$user_http_port"
-    fi
+    # HTTP-Port mit Validierung
+    while true; do
+        read -p "HTTP-Port [$HTTP_PORT]: " user_http_port
+        if [ -n "$user_http_port" ]; then
+            # Prüfe, ob es sich um eine gültige Portnummer handelt
+            if [[ "$user_http_port" =~ ^[0-9]+$ ]] && [ "$user_http_port" -ge 1 ] && [ "$user_http_port" -le 65535 ]; then
+                # Prüfe, ob der Port bereits belegt ist
+                if check_port "$user_http_port"; then
+                    HTTP_PORT="$user_http_port"
+                    break
+                else
+                    log_warning "Port $user_http_port ist bereits belegt. Bitte wählen Sie einen anderen Port."
+                fi
+            else
+                log_error "Ungültige Portnummer. Bitte geben Sie eine Zahl zwischen 1 und 65535 ein."
+            fi
+        else
+            # Prüfe, ob der Standardport verfügbar ist
+            if ! check_port "$HTTP_PORT"; then
+                log_warning "Der Standardport $HTTP_PORT ist bereits belegt."
+                # Suche nach einem freien Port
+                for try_port in 8080 8000 8888 9000 3000; do
+                    if check_port "$try_port"; then
+                        log_info "Port $try_port ist verfügbar und wird verwendet."
+                        HTTP_PORT="$try_port"
+                        break
+                    fi
+                done
+            fi
+            break
+        fi
+    done
     
     # HTTPS-Port (nur wenn HTTPS aktiviert ist)
     if [ "$USE_HTTPS" = true ]; then
-        read -p "HTTPS-Port [$HTTPS_PORT]: " user_https_port
-        if [ -n "$user_https_port" ]; then
-            HTTPS_PORT="$user_https_port"
+        while true; do
+            read -p "HTTPS-Port [$HTTPS_PORT]: " user_https_port
+            if [ -n "$user_https_port" ]; then
+                # Prüfe, ob es sich um eine gültige Portnummer handelt
+                if [[ "$user_https_port" =~ ^[0-9]+$ ]] && [ "$user_https_port" -ge 1 ] && [ "$user_https_port" -le 65535 ]; then
+                    # Stelle sicher, dass HTTP- und HTTPS-Ports unterschiedlich sind
+                    if [ "$user_https_port" = "$HTTP_PORT" ]; then
+                        log_error "HTTPS-Port und HTTP-Port dürfen nicht identisch sein."
+                    elif check_port "$user_https_port"; then
+                        HTTPS_PORT="$user_https_port"
+                        break
+                    else
+                        log_warning "Port $user_https_port ist bereits belegt. Bitte wählen Sie einen anderen Port."
+                    fi
+                else
+                    log_error "Ungültige Portnummer. Bitte geben Sie eine Zahl zwischen 1 und 65535 ein."
+                fi
+            else
+                # Prüfe, ob der Standardport verfügbar ist
+                if ! check_port "$HTTPS_PORT"; then
+                    log_warning "Der Standardport $HTTPS_PORT ist bereits belegt."
+                    # Suche nach einem freien Port
+                    for try_port in 8443 4443 9443 10443; do
+                        if check_port "$try_port"; then
+                            log_info "Port $try_port ist verfügbar und wird verwendet."
+                            HTTPS_PORT="$try_port"
+                            break
+                        fi
+                    done
+                fi
+                break
+            fi
+        done
+    fi
+    
+    # Frage nach erweiterten Optionen
+    echo -e "\n${YELLOW}Möchten Sie erweiterte Installationsoptionen konfigurieren? (j/N)${RESET}"
+    read -p "> " advanced_choice
+    
+    if [[ "$advanced_choice" =~ ^[jJ]$ ]]; then
+        configure_advanced_options
+    fi
+    
+    return 0
+}
+
+# Funktion zur Installation von OpenSSL
+install_openssl() {
+    log_info "OpenSSL wird installiert..."
+    
+    run_with_spinner "case $OS in
+        ubuntu|debian)
+            apt update && apt install -y openssl
+            ;;
+        centos|rhel|fedora)
+            yum install -y openssl
+            ;;
+        alpine)
+            apk add --no-cache openssl
+            ;;
+        *)
+            exit 1
+            ;;
+    esac" "OpenSSL wird installiert"
+}
+
+# Funktion zur Konfiguration erweiterter Installationsoptionen
+configure_advanced_options() {
+    print_header "Erweiterte Installationsoptionen"
+    
+    # Speicherbegrenzung für Docker-Container
+    echo -e "Speicherbegrenzung für Container (leer für keine Begrenzung): "
+    read -p "> " memory_limit
+    
+    if [ -n "$memory_limit" ]; then
+        log_info "Container-Speicherbegrenzung auf $memory_limit gesetzt."
+        MEMORY_LIMIT="$memory_limit"
+    fi
+    
+    # Datenbank-Passwort manuell festlegen
+    echo -e "Benutzerdefiniertes Datenbank-Passwort (leer für automatisch generiertes Passwort): "
+    read -p "> " db_password
+    
+    if [ -n "$db_password" ]; then
+        log_info "Benutzerdefiniertes Datenbank-Passwort festgelegt."
+        DB_PASSWORD="$db_password"
+    fi
+    
+    # Zeitzone konfigurieren
+    echo -e "Zeitzone (Standard: UTC): "
+    read -p "> " timezone
+    
+    if [ -n "$timezone" ]; then
+        log_info "Zeitzone auf $timezone gesetzt."
+        TIMEZONE="$timezone"
+    else
+        TIMEZONE="UTC"
+    fi
+}
+
+# Funktion zum Überprüfen, ob ein Port frei ist
+check_port() {
+    local port=$1
+    
+    # Verwende netstat oder ss, um zu prüfen, ob der Port bereits verwendet wird
+    if command -v netstat &> /dev/null; then
+        if netstat -tuln | grep -q ":$port "; then
+            return 1  # Port ist belegt
+        fi
+    elif command -v ss &> /dev/null; then
+        if ss -tuln | grep -q ":$port "; then
+            return 1  # Port ist belegt
+        fi
+    else
+        # Wenn weder netstat noch ss verfügbar sind, versuche es mit einem temporären Socket
+        if ! (echo > /dev/tcp/127.0.0.1/$port) 2>/dev/null; then
+            # Socket konnte nicht geöffnet werden, also ist der Port wahrscheinlich frei
+            return 0
+        else
+            # Socket konnte geöffnet werden, also ist der Port belegt
+            return 1
         fi
     fi
     
-    # Bestätigen
-    echo -e "${CYAN}Ausgewählte Konfiguration:${RESET}"
-    echo -e "- Installationsverzeichnis: ${BOLD}$INSTALL_DIR${RESET}"
-    echo -e "- Domain-Name: ${BOLD}$DOMAIN_NAME${RESET}"
-    echo -e "- HTTP-Port: ${BOLD}$HTTP_PORT${RESET}"
-    if [ "$USE_HTTPS" = true ]; then
-        echo -e "- HTTPS-Port: ${BOLD}$HTTPS_PORT${RESET}"
-        echo -e "- Protokoll: ${BOLD}HTTPS${RESET}"
+    return 0  # Port ist frei
+}
+
+# Diagnosefunktion für Fehlersuche
+run_diagnostics() {
+    print_header "Fehlerdiagnose"
+    
+    log_info "Führe Systemdiagnose durch..."
+    
+    # Systeminfos ausgeben
+    echo -e "\n${BOLD}Systeminformationen:${RESET}"
+    run_with_spinner "uname -a > /tmp/kormit_diag_system.txt" "Systeminformationen werden gesammelt"
+    
+    # Docker-Status prüfen
+    echo -e "\n${BOLD}Docker-Status:${RESET}"
+    if docker info &> /dev/null; then
+        log_success "Docker-Dienst läuft"
+        run_with_spinner "docker info > /tmp/kormit_diag_docker.txt" "Docker-Informationen werden gesammelt"
     else
-        echo -e "- Protokoll: ${BOLD}HTTP only${RESET}"
+        log_error "Docker-Dienst läuft nicht"
     fi
     
-    read -p "Ist die Konfiguration korrekt? (J/n): " confirm
-    if [[ "$confirm" =~ ^[nN]$ ]]; then
-        get_installation_params
+    # Installationsverzeichnis prüfen
+    echo -e "\n${BOLD}Installationsverzeichnis:${RESET}"
+    if [ -d "$INSTALL_DIR" ]; then
+        log_success "Installationsverzeichnis existiert: $INSTALL_DIR"
+        run_with_spinner "ls -la $INSTALL_DIR > /tmp/kormit_diag_install_dir.txt" "Verzeichnisinhalt wird analysiert"
+        
+        # Prüfe, ob die Docker Compose-Datei existiert
+        if [ -f "$INSTALL_DIR/docker/production/docker-compose.yml" ]; then
+            log_success "Docker Compose-Konfiguration gefunden"
+        else
+            log_error "Docker Compose-Konfiguration nicht gefunden"
+        fi
+        
+        # Prüfe, ob Nginx-Konfiguration existiert
+        if [ -f "$INSTALL_DIR/docker/production/nginx.conf" ]; then
+            log_success "Nginx-Konfiguration gefunden"
+        else
+            log_error "Nginx-Konfiguration nicht gefunden"
+        fi
+        
+        # Prüfe, ob .env-Datei existiert
+        if [ -f "$INSTALL_DIR/docker/production/.env" ]; then
+            log_success ".env-Datei gefunden"
+        else
+            log_error ".env-Datei nicht gefunden"
+        fi
+    else
+        log_error "Installationsverzeichnis existiert nicht: $INSTALL_DIR"
     fi
+    
+    # Netzwerkprüfung
+    echo -e "\n${BOLD}Netzwerkdiagnose:${RESET}"
+    run_with_spinner "ping -c 2 github.com > /tmp/kormit_diag_network.txt" "Netzwerkverbindung wird geprüft"
+    
+    # Portprüfung
+    echo -e "\n${BOLD}Portprüfung:${RESET}"
+    if check_port "$HTTP_PORT"; then
+        log_success "HTTP-Port $HTTP_PORT ist verfügbar"
+    else
+        log_warning "HTTP-Port $HTTP_PORT ist bereits belegt"
+        run_with_spinner "netstat -tuln | grep $HTTP_PORT > /tmp/kormit_diag_port_http.txt" "Port-Belegung wird analysiert"
+    fi
+    
+    if [ "$USE_HTTPS" = true ] && ! check_port "$HTTPS_PORT"; then
+        log_warning "HTTPS-Port $HTTPS_PORT ist bereits belegt"
+        run_with_spinner "netstat -tuln | grep $HTTPS_PORT > /tmp/kormit_diag_port_https.txt" "Port-Belegung wird analysiert"
+    fi
+    
+    # Sammle alle Diagnosedateien in eine Zip-Datei
+    if command -v zip &> /dev/null; then
+        run_with_spinner "zip -j /tmp/kormit_diagnostics.zip /tmp/kormit_diag_*.txt" "Diagnose-Informationen werden gesammelt"
+        log_success "Diagnose-Informationen wurden in /tmp/kormit_diagnostics.zip gespeichert"
+    else
+        log_success "Diagnose-Informationen wurden in /tmp/ gespeichert (kormit_diag_*.txt)"
+    fi
+    
+    # Tipps zur Fehlerbehebung
+    echo -e "\n${BOLD}Mögliche Lösungen:${RESET}"
+    echo -e "1. Stellen Sie sicher, dass Docker aktiv ist: ${CYAN}systemctl start docker${RESET}"
+    echo -e "2. Prüfen Sie, ob die Ports frei sind: ${CYAN}netstat -tuln | grep $HTTP_PORT${RESET}"
+    echo -e "3. Überprüfen Sie den Speicherplatz: ${CYAN}df -h${RESET}"
+    echo -e "4. Versuchen Sie die Reparaturoptionen: ${CYAN}sudo $0${RESET} → Option ${CYAN}10${RESET}"
+    echo -e "5. Bei anhaltenden Problemen: Besuchen Sie ${CYAN}https://github.com/kormit-panel/kormit/issues${RESET}"
 }
 
 # Funktionen für Kormit-Management
@@ -822,30 +1549,91 @@ EOL
 
 # Interaktives Menü
 show_menu() {
+    clear
     print_logo
-    echo -e "${CYAN}${BOLD}HAUPTMENÜ${RESET}"
+    
+    # Prüfen, ob Updates verfügbar sind, falls aktiviert
+    if [ "$AUTO_UPDATE_CHECK" = true ]; then
+        check_for_updates
+    fi
+    
+    # Status der Kormit-Installation prüfen
+    local is_installed=false
+    local is_running=false
+    
+    if [ -d "$INSTALL_DIR/docker/production" ]; then
+        is_installed=true
+        
+        # Überprüfe, ob Kormit läuft
+        if [ -f "$INSTALL_DIR/docker/production/.env" ] && docker ps | grep -q "kormit-proxy"; then
+            is_running=true
+        fi
+    fi
+    
+    # Statusanzeige
+    echo -e "\n${CYAN}${BOLD}STATUS:${RESET}"
+    if [ "$is_installed" = true ]; then
+        if [ "$is_running" = true ]; then
+            echo -e "  ${GREEN}${BOLD}●${RESET} Kormit ist ${GREEN}aktiv${RESET} und läuft auf ${CYAN}${DOMAIN_NAME}:${HTTP_PORT}${RESET}"
+        else
+            echo -e "  ${YELLOW}${BOLD}●${RESET} Kormit ist ${YELLOW}installiert${RESET}, aber derzeit ${DIM}nicht aktiv${RESET}"
+        fi
+    else
+        echo -e "  ${RED}${BOLD}●${RESET} Kormit ist ${RED}nicht installiert${RESET}"
+    fi
+    
+    # Hauptmenü
+    echo -e "\n${CYAN}${BOLD}HAUPTMENÜ${RESET}"
     echo -e "${CYAN}═════════${RESET}"
-    echo -e "1) ${BOLD}Abhängigkeiten prüfen${RESET} - Docker, Git, etc."
-    echo -e "2) ${BOLD}Repository klonen/aktualisieren${RESET} - Neueste Code-Version holen"
-    echo -e "3) ${BOLD}Kormit installieren${RESET} - Neue Installation durchführen"
+    
+    # Setup-Bereich
+    echo -e "${BOLD}Setup:${RESET}"
+    echo -e " ${GREEN}1${RESET}) ${BOLD}Abhängigkeiten prüfen${RESET} - Docker, Git, etc."
+    echo -e " ${GREEN}2${RESET}) ${BOLD}Repository klonen/aktualisieren${RESET} - Neueste Code-Version holen"
+    echo -e " ${GREEN}3${RESET}) ${BOLD}Kormit installieren${RESET} - Neue Installation durchführen"
+    
+    # Trennlinie
     echo -e "${CYAN}───────────────────────────${RESET}"
-    echo -e "4) ${BOLD}Kormit starten${RESET} - Dienst starten"
-    echo -e "5) ${BOLD}Kormit stoppen${RESET} - Dienst anhalten"
-    echo -e "6) ${BOLD}Kormit neustarten${RESET} - Dienst neu starten"
-    echo -e "7) ${BOLD}Kormit aktualisieren${RESET} - Auf neue Version aktualisieren"
+    
+    # Service-Bereich mit Status-Symbolen
+    echo -e "${BOLD}Verwaltung:${RESET}"
+    if [ "$is_running" = true ]; then
+        echo -e " ${GREEN}4${RESET}) ${BOLD}Kormit ${RED}stoppen${RESET} - Dienst anhalten"
+    else
+        echo -e " ${GREEN}4${RESET}) ${BOLD}Kormit ${GREEN}starten${RESET} - Dienst starten"
+    fi
+    echo -e " ${GREEN}5${RESET}) ${BOLD}Kormit neustarten${RESET} - Dienst neu starten"
+    echo -e " ${GREEN}6${RESET}) ${BOLD}Kormit aktualisieren${RESET} - Auf neue Version aktualisieren"
+    
+    # Trennlinie
     echo -e "${CYAN}───────────────────────────${RESET}"
-    echo -e "8) ${BOLD}Logs anzeigen${RESET} - Container-Logs einsehen"
-    echo -e "9) ${BOLD}Status anzeigen${RESET} - Aktuellen Dienststatus prüfen"
-    echo -e "10) ${BOLD}Installation reparieren${RESET} - Erweiterte Reparaturfunktionen"
-    echo -e "11) ${BOLD}Image-Tags korrigieren${RESET} - Manifest-unknown-Fehler beheben"
-    echo -e "12) ${BOLD}Nginx SSL-Konfiguration reparieren${RESET} - SSL-Probleme beheben"
+    
+    # Monitoring- und Wartungsbereich
+    echo -e "${BOLD}Monitoring & Wartung:${RESET}"
+    echo -e " ${GREEN}7${RESET}) ${BOLD}Logs anzeigen${RESET} - Container-Logs einsehen"
+    echo -e " ${GREEN}8${RESET}) ${BOLD}Status anzeigen${RESET} - Aktuellen Dienststatus prüfen"
+    echo -e " ${GREEN}9${RESET}) ${BOLD}Installation reparieren${RESET} - Erweiterte Reparaturfunktionen"
+    
+    # Trennlinie
     echo -e "${CYAN}───────────────────────────${RESET}"
-    echo -e "13) ${BOLD}Debug-Modus${RESET} - Toggle Debug (aktuell: $([ "$DEBUG" = true ] && echo "AN" || echo "AUS"))"
-    echo -e "14) ${BOLD}Installationsverzeichnis ändern${RESET} - (aktuell: $INSTALL_DIR)"
+    
+    # Weitere Optionen
+    echo -e "${BOLD}Weitere Optionen:${RESET}"
+    echo -e " ${GREEN}d${RESET}) ${BOLD}Debug-Modus${RESET} - ${is_enabled $DEBUG}"
+    echo -e " ${GREEN}a${RESET}) ${BOLD}Animationen${RESET} - ${is_enabled $ANIMATION_ENABLED}"
+    echo -e " ${GREEN}u${RESET}) ${BOLD}Auto-Update-Check${RESET} - ${is_enabled $AUTO_UPDATE_CHECK}"
+    echo -e " ${GREEN}p${RESET}) ${BOLD}Installationspfad ändern${RESET} - (aktuell: ${CYAN}$INSTALL_DIR${RESET})"
+    
+    # Trennlinie
     echo -e "${CYAN}───────────────────────────${RESET}"
-    echo -e "0) ${BOLD}Beenden${RESET} - Programm beenden"
-    echo ""
-    echo -e "Wählen Sie eine Option (0-14):"
+    echo -e " ${RED}0${RESET}) ${RED}${BOLD}Beenden${RESET} - Programm beenden"
+    
+    # Schnellzugriff für laufende Instanz
+    if [ "$is_running" = true ]; then
+        echo -e "\n${BOLD}Schnellzugriff:${RESET} ${UNDERLINE}http://${DOMAIN_NAME}:${HTTP_PORT}${RESET}"
+    fi
+    
+    echo -e "\nWählen Sie eine Option:"
     read -p "> " choice
     
     case $choice in
@@ -855,95 +1643,305 @@ show_menu() {
             ;;
         2)
             update_repository
-            press_enter_to_continue;;
+            press_enter_to_continue
+            ;;
         3)
             install_kormit
             press_enter_to_continue
             ;;
         4)
-            start_kormit
+            if [ "$is_running" = true ]; then
+                stop_kormit
+            else
+                start_kormit
+            fi
             press_enter_to_continue
             ;;
         5)
-            stop_kormit
-            press_enter_to_continue
-            ;;
-        6)
             restart_kormit
             press_enter_to_continue
             ;;
-        7)
+        6)
             update_kormit
             press_enter_to_continue
             ;;
-        8)
+        7)
             show_logs
             # Nach less brauchen wir keinen press_enter
             ;;
-        9)
+        8)
             check_status
             press_enter_to_continue
             ;;
-        10)
-            repair_installation
-            press_enter_to_continue
+        9)
+            repair_menu
+            # Das Reparaturmenü hat seine eigene Navigation
             ;;
-        11)
-            fix_image_tags
-            press_enter_to_continue
+        d|D)
+            toggle_debug
             ;;
-        12)
-            fix_nginx_ssl
-            show_menu
+        a|A)
+            toggle_animations
             ;;
-        13)
-            if [ "$DEBUG" = true ]; then
-                DEBUG=false
-                log_info "Debug-Modus deaktiviert."
-            else
-                DEBUG=true
-                log_info "Debug-Modus aktiviert."
-            fi
-            press_enter_to_continue
+        u|U)
+            toggle_auto_update
             ;;
-        14)
-            echo -e "Aktuelles Installationsverzeichnis: ${BOLD}$INSTALL_DIR${RESET}"
-            read -p "Neues Installationsverzeichnis eingeben: " new_dir
-            if [ -n "$new_dir" ]; then
-                INSTALL_DIR="$new_dir"
-                log_info "Installationsverzeichnis geändert auf: ${BOLD}$INSTALL_DIR${RESET}"
-            fi
-            press_enter_to_continue
+        p|P)
+            change_install_path
             ;;
         0)
             echo -e "${GREEN}Auf Wiedersehen!${RESET}"
             exit 0
             ;;
         *)
-            log_error "Ungültige Option. Bitte wählen Sie eine Zahl zwischen 0 und 14."
+            log_error "Ungültige Option. Bitte wählen Sie eine gültige Option."
             press_enter_to_continue
             ;;
     esac
+    
+    # Zurück zum Hauptmenü
+    show_menu
+}
+
+# Hilfsfunktion für die Statusanzeige im Menü
+is_enabled() {
+    if [ "$1" = true ]; then
+        echo -e "${GREEN}Aktiviert${RESET}"
+    else
+        echo -e "${DIM}Deaktiviert${RESET}"
+    fi
+}
+
+# Verbesserte Reparaturmenüfunktion
+repair_menu() {
+    clear
+    print_header "Reparatur & Wartung"
+    
+    echo -e "${BOLD}Wählen Sie eine Option:${RESET}"
+    echo -e " ${GREEN}1${RESET}) ${BOLD}Komplettüberprüfung${RESET} - Vollständige Systemdiagnose"
+    echo -e " ${GREEN}2${RESET}) ${BOLD}Management-Skripte reparieren${RESET} - Start-, Stop- und Update-Skripte"
+    echo -e " ${GREEN}3${RESET}) ${BOLD}Image-Tags korrigieren${RESET} - Manifest-unknown-Fehler beheben"
+    echo -e " ${GREEN}4${RESET}) ${BOLD}Container neustarten${RESET} - Alle Container neu starten"
+    echo -e " ${GREEN}5${RESET}) ${BOLD}Container-Images aktualisieren${RESET} - Neueste Images beziehen"
+    echo -e " ${GREEN}6${RESET}) ${BOLD}Nginx-Konfiguration reparieren${RESET} - SSL/HTTP-Probleme beheben"
+    echo -e " ${GREEN}7${RESET}) ${BOLD}Datenbank sichern${RESET} - Backup der Kormit-Datenbank erstellen"
+    echo -e " ${GREEN}8${RESET}) ${BOLD}Neuinstallation vorbereiten${RESET} - Alle Daten löschen"
+    echo -e " ${RED}0${RESET}) ${BOLD}Zurück${RESET} - Zum Hauptmenü zurückkehren"
+    
+    echo -e "\nWählen Sie eine Option (0-8):"
+    read -p "> " repair_option
+    
+    case $repair_option in
+        1)
+            run_diagnostics
+            press_enter_to_continue
+            ;;
+        2)
+            repair_scripts
+            press_enter_to_continue
+            ;;
+        3)
+            fix_image_tags
+            press_enter_to_continue
+            ;;
+        4)
+            restart_kormit
+            press_enter_to_continue
+            ;;
+        5)
+            pull_images
+            press_enter_to_continue
+            ;;
+        6)
+            fix_nginx_ssl
+            press_enter_to_continue
+            ;;
+        7)
+            backup_database
+            press_enter_to_continue
+            ;;
+        8)
+            prepare_reinstall
+            press_enter_to_continue
+            ;;
+        0)
+            # Zurück zum Hauptmenü
+            return
+            ;;
+        *)
+            log_error "Ungültige Option."
+            press_enter_to_continue
+            ;;
+    esac
+    
+    # Zurück zum Reparaturmenü
+    repair_menu
+}
+
+# Toggle-Funktionen für Menüoptionen
+toggle_debug() {
+    if [ "$DEBUG" = true ]; then
+        DEBUG=false
+        log_info "Debug-Modus wurde deaktiviert."
+    else
+        DEBUG=true
+        log_info "Debug-Modus wurde aktiviert."
+    fi
+    save_config
+    press_enter_to_continue
+}
+
+toggle_animations() {
+    if [ "$ANIMATION_ENABLED" = true ]; then
+        ANIMATION_ENABLED=false
+        log_info "Animationen wurden deaktiviert."
+    else
+        ANIMATION_ENABLED=true
+        log_info "Animationen wurden aktiviert."
+    fi
+    save_config
+    press_enter_to_continue
+}
+
+toggle_auto_update() {
+    if [ "$AUTO_UPDATE_CHECK" = true ]; then
+        AUTO_UPDATE_CHECK=false
+        log_info "Auto-Update-Check wurde deaktiviert."
+    else
+        AUTO_UPDATE_CHECK=true
+        log_info "Auto-Update-Check wurde aktiviert."
+    fi
+    save_config
+    press_enter_to_continue
+}
+
+change_install_path() {
+    echo -e "Aktuelles Installationsverzeichnis: ${BOLD}$INSTALL_DIR${RESET}"
+    echo -e "Geben Sie ein neues Installationsverzeichnis ein (oder [Enter] für keine Änderung):"
+    read -p "> " new_dir
+    
+    if [ -n "$new_dir" ]; then
+        INSTALL_DIR="$new_dir"
+        log_success "Installationsverzeichnis geändert auf: ${BOLD}$INSTALL_DIR${RESET}"
+        save_config
+    fi
+    press_enter_to_continue
+}
+
+# Unterstützung für Datenbank-Backups
+backup_database() {
+    print_header "Datenbank-Backup"
+    
+    # Prüfen, ob Kormit installiert ist
+    if [ ! -d "$INSTALL_DIR/docker/production" ]; then
+        log_error "Kormit scheint nicht installiert zu sein. Nichts zu sichern."
+        return 1
+    fi
+    
+    # Backup-Verzeichnis erstellen
+    BACKUP_DIR="$INSTALL_DIR/backups"
+    mkdir -p "$BACKUP_DIR"
+    
+    # Aktuelles Datum für den Dateinamen
+    BACKUP_DATE=$(date +"%Y-%m-%d_%H-%M-%S")
+    BACKUP_FILE="$BACKUP_DIR/kormit_db_$BACKUP_DATE.sql"
+    
+    log_info "Erstelle Backup der Kormit-Datenbank..."
+    
+    # Prüfen, ob der Container läuft
+    if ! docker ps | grep -q "kormit-db"; then
+        log_warning "Datenbank-Container läuft nicht. Starte Container für das Backup..."
+        cd "$INSTALL_DIR/docker/production"
+        docker compose up -d kormit-db
+        # Warte, bis der Container bereit ist
+        sleep 10
+    fi
+    
+    # Database Dump durchführen
+    cd "$INSTALL_DIR/docker/production"
+    
+    if run_with_spinner "
+        export PGPASSWORD=\$(grep DB_PASSWORD .env | cut -d'=' -f2)
+        docker exec kormit-db pg_dump -U \$(grep DB_USER .env | cut -d'=' -f2) \$(grep DB_NAME .env | cut -d'=' -f2) > \"$BACKUP_FILE\"
+    " "Datenbank wird gesichert"; then
+        log_success "Datenbank wurde erfolgreich gesichert: $BACKUP_FILE"
+        
+        # Komprimiere die Backup-Datei
+        if command -v gzip &> /dev/null; then
+            run_with_spinner "gzip -f \"$BACKUP_FILE\"" "Backup wird komprimiert"
+            log_success "Backup wurde komprimiert: ${BACKUP_FILE}.gz"
+            BACKUP_FILE="${BACKUP_FILE}.gz"
+        fi
+    else
+        log_error "Fehler beim Sichern der Datenbank."
+        return 1
+    fi
+    
+    # Größe des Backups anzeigen
+    BACKUP_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
+    log_info "Backup-Größe: $BACKUP_SIZE"
+    
+    return 0
+}
+
+# Vorbereitung für eine Neuinstallation
+prepare_reinstall() {
+    print_header "Neuinstallation vorbereiten"
+    
+    echo -e "${RED}${BOLD}WARNUNG: Diese Aktion wird alle Kormit-Daten entfernen!${RESET}"
+    echo -e "${RED}Alle Container, Volumes und Konfigurationsdateien werden gelöscht.${RESET}"
+    echo -e "\nMöchten Sie vorher ein Backup erstellen? (J/n):"
+    read -p "> " create_backup
+    
+    if [[ ! "$create_backup" =~ ^[nN]$ ]]; then
+        backup_database
+    fi
+    
+    echo -e "\n${RED}${BOLD}LETZTE WARNUNG:${RESET} Alle Daten werden unwiderruflich gelöscht."
+    echo -e "Bitte geben Sie ${RED}\"LÖSCHEN\"${RESET} ein, um zu bestätigen:"
+    read -p "> " confirmation
+    
+    if [ "$confirmation" != "LÖSCHEN" ]; then
+        log_warning "Aktion abgebrochen. Nichts wurde gelöscht."
+        return
+    fi
+    
+    # Stoppe und entferne Container
+    if [ -d "$INSTALL_DIR/docker/production" ]; then
+        log_info "Stoppe und entferne Container..."
+        cd "$INSTALL_DIR/docker/production"
+        run_with_spinner "docker compose down -v" "Container werden gestoppt und entfernt"
+    fi
+    
+    # Lösche alle Docker-Volumes mit dem Kormit-Präfix
+    log_info "Lösche Docker Volumes..."
+    run_with_spinner "docker volume rm \$(docker volume ls -q | grep kormit) 2>/dev/null || true" "Volumes werden gelöscht"
+    
+    # Lösche das Installationsverzeichnis
+    log_info "Lösche Installationsverzeichnis..."
+    run_with_spinner "rm -rf \"$INSTALL_DIR\"" "Installationsverzeichnis wird gelöscht"
+    
+    log_success "Alle Kormit-Daten wurden gelöscht. Das System ist bereit für eine Neuinstallation."
 }
 
 press_enter_to_continue() {
     echo ""
-    read -p "Drücken Sie Enter, um fortzufahren..."
+    read -p "Drücken Sie [Enter], um fortzufahren..."
 }
 
 # Hauptfunktion
 main() {
+    # Lade gespeicherte Konfiguration
+    load_config
+    
     # Root-Rechte prüfen
     check_root
     
     # Betriebssystem erkennen
     detect_os
     
-    # Menü in Schleife anzeigen
-    while true; do
-        clear
-        show_menu
-    done
+    # Menü anzeigen
+    show_menu
 }
 
 # Skript starten
