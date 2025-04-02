@@ -1642,6 +1642,7 @@ read_menu_choice() {
     echo -e "\nWählen Sie eine Option [0-9, d, a, u, p]:"
     read -rp "> " choice
     echo "$choice"
+    # Keine Rückgabe - direkt im globalen Bereich verwenden
 }
 
 # Interaktives Menü
@@ -1753,9 +1754,11 @@ show_menu() {
     echo -e "\n${DIM}Kormit Control Center ${VERSION_INFO} | $(date '+%d.%m.%Y %H:%M')${RESET}"
     
     # Eingabeaufforderung mit verbesserter Robustheit
-    choice=$(read_menu_choice)
+    # Direkte Eingabe ohne Funktionsaufruf für bessere Kompatibilität
+    echo -e "\nWählen Sie eine Option [0-9, d, a, u, p]:"
+    read -rp "> " choice
     
-    case $choice in
+    case "$choice" in
         1)
             check_dependencies
             press_enter_to_continue

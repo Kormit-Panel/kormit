@@ -3,8 +3,26 @@ name: Build and Push Docker Images
 on:
   push:
     branches: [ main, master ]
+    paths-ignore:
+      - 'deploy/**'
+      - 'docs/**'
+      - 'README.md'
+      - 'LICENSE'
+      - '*.sh'
+      - '*.md'
+      - '.gitignore'
+      - '.github/**'
   pull_request:
     branches: [ main, master ]
+    paths-ignore:
+      - 'deploy/**'
+      - 'docs/**'
+      - 'README.md'
+      - 'LICENSE'
+      - '*.sh'
+      - '*.md'
+      - '.gitignore'
+      - '.github/**'
   release:
     types: [published]
 
