@@ -30,6 +30,7 @@ show_help() {
     echo "  --http-port=PORT     HTTP-Port (Standard: 80)"
     echo "  --https-port=PORT    HTTPS-Port (Standard: 443, nur mit --use-https)"
     echo "  --use-https          HTTPS aktivieren (Standard: deaktiviert)"
+    echo "  --http-only          Nur HTTP verwenden (Standard: aktiviert)"
     echo "  --help               Diese Hilfe anzeigen"
     echo ""
     exit 0
@@ -52,6 +53,9 @@ for i in "$@"; do
             ;;
         --use-https)
             HTTP_ONLY=false
+            ;;
+        --http-only)
+            HTTP_ONLY=true
             ;;
         --help)
             show_help

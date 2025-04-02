@@ -306,35 +306,11 @@ install_kormit() {
     
     # Standard-Installations-Skript ausführen
     log_info "Kormit wird installiert..."
-    
-    # Stellen Sie sicher, dass das Installationsskript vorhanden ist
-    if [ -f "$TMP_DIR/deploy/install.sh" ]; then
-        chmod +x "$TMP_DIR/deploy/install.sh"
-        
-        # Argumente basierend auf gesetzten Optionen erstellen
-        install_args="--install-dir=$INSTALL_DIR --domain=$DOMAIN_NAME"
-        install_args="$install_args --http-port=$HTTP_PORT --https-port=$HTTPS_PORT"
-        
-        if [ "$USE_HTTPS" = false ]; then
-            install_args="$install_args --http-only"
-        fi
-        
-        # Installationsskript starten
-        log_info "Führe aus: $TMP_DIR/deploy/install.sh $install_args"
-        cd "$TMP_DIR"
-        if ./deploy/install.sh $install_args; then
-            log_success "Kormit wurde erfolgreich installiert."
-            
-            # Nach der Installation die Image-Tags korrigieren
-            log_info "Korrigiere Image-Tags in der .env-Datei..."
-            fix_image_tags
-        else
-            log_error "Es gab Probleme bei der Installation von Kormit."
-            exit 1
-        fi
+    log_info "Führe aus: $TMP_DIR/deploy/install.sh --install-dir=$INSTALL_DIR --domain=$DOMAIN_NAME --http-port=$HTTP_PORT --https-port=$HTTPS_PORT"
+    if [ "$USE_HTTPS" = true ]; then
+        $TMP_DIR/deploy/install.sh --install-dir=$INSTALL_DIR --domain=$DOMAIN_NAME --http-port=$HTTP_PORT --https-port=$HTTPS_PORT --use-https
     else
-        log_error "Installationsskript konnte nicht gefunden werden: $TMP_DIR/deploy/install.sh"
-        exit 1
+        $TMP_DIR/deploy/install.sh --install-dir=$INSTALL_DIR --domain=$DOMAIN_NAME --http-port=$HTTP_PORT --https-port=$HTTPS_PORT --http-only
     fi
 }
 
