@@ -2805,7 +2805,7 @@ prepare_reinstall() {
 show_dialog_menu() {
     local HEIGHT=20
     local WIDTH=70
-    local CHOICE_HEIGHT=13
+    local CHOICE_HEIGHT=14
     local BACKTITLE="Kormit Management Tool v$KORMIT_MANAGER_VERSION"
     local TITLE="Hauptmenü"
     local MENU="Wählen Sie eine Option:"
@@ -2819,6 +2819,7 @@ show_dialog_menu() {
         7 "Logs anzeigen - Container-Logs einsehen"
         8 "Status anzeigen - Aktuellen Dienststatus prüfen"
         9 "Installation reparieren - Erweiterte Reparaturfunktionen"
+        h "Port-Konfiguration ändern - HTTP/HTTPS-Ports anpassen"
         d "Debug-Modus umschalten - Aktueller Status: $(is_enabled "$DEBUG")"
         a "Animationen umschalten - Aktueller Status: $(is_enabled "$ANIMATION_ENABLED")"
         u "Auto-Update-Check umschalten - Aktueller Status: $(is_enabled "$AUTO_UPDATE_CHECK")"
@@ -2899,6 +2900,10 @@ show_dialog_menu() {
                 log_success "Installationsverzeichnis geändert auf: ${BOLD}$INSTALL_DIR${RESET}"
                 save_config
             fi
+            ;;
+        h)
+            # Port-Konfiguration ändern
+            update_port_configuration
             ;;
         0)
             clear
@@ -3020,6 +3025,234 @@ main() {
     else
         # Textbasiertes Menü anzeigen
         show_menu
+    fi
+}
+
+# Funktion zum Aktualisieren der Port-Konfiguration
+update_port_configuration() {
+    local BACKTITLE="Kormit Management Tool v$KORMIT_MANAGER_VERSION"
+    local TITLE="Port-Konfiguration"
+    
+    # Aktuelle Port-Konfiguration anzeigen
+    local PORT_INFO="Aktuelle Konfiguration:\n\n"
+    PORT_INFO+="HTTP-Port: ${HTTP_PORT}\n"
+    PORT_INFO+="HTTPS-Port: ${HTTPS_PORT}\n\n"
+    PORT_INFO+="WICHTIG: Wenn Port 80 bereits belegt ist (z.B. durch einen anderen Webserver),\n"
+    PORT_INFO+="wird empfohlen, einen anderen Port wie 8090 zu verwenden."
+    
+    dialog --clear --backtitle "$BACKTITLE" \
+           --title "$TITLE" \
+           --msgbox "$PORT_INFO" \
+           15 70
+    
+    # HTTP-Port mit Validierung
+    while true; do
+        local new_http_port=$(dialog --clear --backtitle "$BACKTITLE" \
+                            --title "$TITLE" \
+                            --inputbox "Neuer HTTP-Port (leer lassen für aktuellen Wert):" \
+                            10 60 "$HTTP_PORT" \
+                            2>&1 >/dev/tty)
+        
+        # Abbruch bei ESC oder Cancel
+        if [[ $? -ne 0 ]]; then
+            break
+        fi
+        
+        if [[ -n "$new_http_port" ]]; then
+            # Prüfe, ob es sich um eine gültige Portnummer handelt
+            if [[ "$new_http_port" =~ ^[0-9]+$ ]] && [[ "$new_http_port" -ge 1 ]] && [[ "$new_http_port" -le 65535 ]]; then
+                # Prüfe, ob der Port bereits belegt ist (außer dem aktuellen)
+                if [[ "$new_http_port" != "$HTTP_PORT" ]]; then
+                    if check_port "$new_http_port"; then
+                        HTTP_PORT="$new_http_port"
+                        break
+                    else
+                        dialog --clear --backtitle "$BACKTITLE" \
+                               --title "Warnung" \
+                               --msgbox "Port $new_http_port ist bereits belegt. Möchten Sie ihn trotzdem verwenden?" \
+                               7 60
+                        
+                        if dialog --clear --backtitle "$BACKTITLE" \
+                                --title "Bestätigung" \
+                                --yesno "Port $new_http_port trotz Belegung verwenden?" \
+                                7 60; then
+                            HTTP_PORT="$new_http_port"
+                            break
+                        fi
+                    fi
+                else
+                    break  # Gleicher Port wie bisher, kein Update nötig
+                fi
+            else
+                dialog --clear --backtitle "$BACKTITLE" \
+                       --title "Fehler" \
+                       --msgbox "Ungültige Portnummer. Bitte geben Sie eine Zahl zwischen 1 und 65535 ein." \
+                       7 60
+            fi
+        else
+            break  # Keine Eingabe, behalte aktuellen Wert
+        fi
+    done
+    
+    # HTTPS-Port (nur wenn HTTPS aktiviert ist)
+    if [[ "$USE_HTTPS" = true ]]; then
+        while true; do
+            local new_https_port=$(dialog --clear --backtitle "$BACKTITLE" \
+                                --title "$TITLE" \
+                                --inputbox "Neuer HTTPS-Port (leer lassen für aktuellen Wert):" \
+                                10 60 "$HTTPS_PORT" \
+                                2>&1 >/dev/tty)
+            
+            # Abbruch bei ESC oder Cancel
+            if [[ $? -ne 0 ]]; then
+                break
+            fi
+            
+            if [[ -n "$new_https_port" ]]; then
+                # Prüfe, ob es sich um eine gültige Portnummer handelt
+                if [[ "$new_https_port" =~ ^[0-9]+$ ]] && [[ "$new_https_port" -ge 1 ]] && [[ "$new_https_port" -le 65535 ]]; then
+                    # Stelle sicher, dass HTTP- und HTTPS-Ports unterschiedlich sind
+                    if [[ "$new_https_port" = "$HTTP_PORT" ]]; then
+                        dialog --clear --backtitle "$BACKTITLE" \
+                               --title "Fehler" \
+                               --msgbox "HTTPS-Port und HTTP-Port dürfen nicht identisch sein." \
+                               7 60
+                    elif [[ "$new_https_port" != "$HTTPS_PORT" ]]; then
+                        if check_port "$new_https_port"; then
+                            HTTPS_PORT="$new_https_port"
+                            break
+                        else
+                            dialog --clear --backtitle "$BACKTITLE" \
+                                   --title "Warnung" \
+                                   --msgbox "Port $new_https_port ist bereits belegt. Möchten Sie ihn trotzdem verwenden?" \
+                                   7 60
+                            
+                            if dialog --clear --backtitle "$BACKTITLE" \
+                                    --title "Bestätigung" \
+                                    --yesno "Port $new_https_port trotz Belegung verwenden?" \
+                                    7 60; then
+                                HTTPS_PORT="$new_https_port"
+                                break
+                            fi
+                        fi
+                    else
+                        break  # Gleicher Port wie bisher, kein Update nötig
+                    fi
+                else
+                    dialog --clear --backtitle "$BACKTITLE" \
+                           --title "Fehler" \
+                           --msgbox "Ungültige Portnummer. Bitte geben Sie eine Zahl zwischen 1 und 65535 ein." \
+                           7 60
+                fi
+            else
+                break  # Keine Eingabe, behalte aktuellen Wert
+            fi
+        done
+    fi
+    
+    # Konfiguration speichern
+    save_config
+    
+    # Docker-Compose-Konfiguration aktualisieren
+    update_docker_compose_ports
+    
+    # Erfolgsbenachrichtigung
+    dialog --clear --backtitle "$BACKTITLE" \
+           --title "Erfolg" \
+           --msgbox "Port-Konfiguration wurde aktualisiert.\n\nHTTP-Port: ${HTTP_PORT}\nHTTPS-Port: ${HTTPS_PORT}\n\nDie Änderungen werden beim nächsten Start von Kormit wirksam." \
+           11 70
+}
+
+# Funktion zum Aktualisieren der Docker-Compose-Konfiguration
+update_docker_compose_ports() {
+    local DOCKER_COMPOSE_PATH="$INSTALL_DIR/docker/production/docker-compose.yml"
+    local ENV_FILE_PATH="$INSTALL_DIR/docker/production/.env"
+    
+    if [[ -f "$DOCKER_COMPOSE_PATH" ]]; then
+        log_info "Aktualisiere Docker-Compose-Konfiguration..."
+        
+        # Erstelle .env-Datei, falls noch nicht vorhanden
+        if [[ ! -f "$ENV_FILE_PATH" ]]; then
+            mkdir -p "$(dirname "$ENV_FILE_PATH")"
+            cat > "$ENV_FILE_PATH" << EOL
+# Kormit Production Environment Variables
+HTTP_PORT=$HTTP_PORT
+HTTPS_PORT=$HTTPS_PORT
+DB_USER=kormit_user
+DB_PASSWORD=secure_password_change_me
+DB_NAME=kormit_db
+TIMEZONE=Europe/Berlin
+SECRET_KEY=change_this_to_a_secure_random_string
+VOLUME_PREFIX=kormit
+NETWORK_NAME=kormit-network
+EOL
+            log_success "Neue .env-Datei erstellt mit HTTP-Port $HTTP_PORT"
+        else
+            # Aktualisiere vorhandene .env-Datei
+            if grep -q "^HTTP_PORT=" "$ENV_FILE_PATH"; then
+                sed -i "s/^HTTP_PORT=.*$/HTTP_PORT=$HTTP_PORT/" "$ENV_FILE_PATH"
+            else
+                echo "HTTP_PORT=$HTTP_PORT" >> "$ENV_FILE_PATH"
+            fi
+            
+            if grep -q "^HTTPS_PORT=" "$ENV_FILE_PATH"; then
+                sed -i "s/^HTTPS_PORT=.*$/HTTPS_PORT=$HTTPS_PORT/" "$ENV_FILE_PATH"
+            else
+                echo "HTTPS_PORT=$HTTPS_PORT" >> "$ENV_FILE_PATH"
+            fi
+            
+            log_success ".env-Datei aktualisiert mit HTTP-Port $HTTP_PORT und HTTPS-Port $HTTPS_PORT"
+        fi
+        
+        # Erstelle ein Neustart-Skript
+        local RESTART_SCRIPT="$INSTALL_DIR/docker/production/restart.sh"
+        cat > "$RESTART_SCRIPT" << 'EOL'
+#!/bin/bash
+# Skript zum Neu-Starten der Kormit-Container mit neuer Konfiguration
+
+set -e
+
+# Farben für Ausgaben
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+echo -e "${YELLOW}Stoppe laufende Kormit-Container...${NC}"
+docker-compose -f docker-compose.yml down || true
+
+echo -e "${YELLOW}Starte Container mit neuer Konfiguration...${NC}"
+docker-compose -f docker-compose.yml up -d
+
+echo -e "${GREEN}Container wurden neu gestartet.${NC}"
+echo -e "${YELLOW}Kormit ist nun erreichbar unter: http://localhost:$(grep HTTP_PORT .env | cut -d= -f2)${NC}"
+
+# Ausgabe der Container-Status
+echo -e "${YELLOW}Container-Status:${NC}"
+docker-compose -f docker-compose.yml ps
+
+echo -e "${YELLOW}Prüfe Logs für Fehler...${NC}"
+docker-compose -f docker-compose.yml logs --tail=10
+
+echo -e "${GREEN}Fertig! Überprüfe die Frontend-Verbindung im Browser unter http://localhost:$(grep HTTP_PORT .env | cut -d= -f2)${NC}"
+EOL
+
+        chmod +x "$RESTART_SCRIPT"
+        log_success "Neustart-Skript erstellt: $RESTART_SCRIPT"
+        
+        # Fragen, ob die Container neu gestartet werden sollen
+        if dialog --clear --backtitle "Kormit Management Tool v$KORMIT_MANAGER_VERSION" \
+                 --title "Container neustarten" \
+                 --yesno "Möchten Sie die Container jetzt mit der neuen Port-Konfiguration neustarten?" \
+                 7 70; then
+            
+            cd "$INSTALL_DIR/docker/production" || return
+            bash ./restart.sh
+            press_enter_to_continue
+        fi
+    else
+        log_warning "Docker-Compose-Konfiguration nicht gefunden: $DOCKER_COMPOSE_PATH"
+        log_info "Die Ports werden bei der nächsten Installation verwendet."
     fi
 }
 
