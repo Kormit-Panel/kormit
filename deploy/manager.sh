@@ -731,6 +731,107 @@ install_kormit() {
         fi
     fi
     
+    # Überprüfe, ob das deploy-Verzeichnis existiert
+    if [[ ! -d "$TMP_DIR/deploy" ]]; then
+        log_error "Deploy-Verzeichnis nicht gefunden: $TMP_DIR/deploy"
+        log_info "Repository-Struktur untersuchen..."
+        find "$TMP_DIR" -type d -maxdepth 2
+        return 1
+    fi
+    
+    # Überprüfe, ob install.sh existiert
+    if [[ ! -f "$TMP_DIR/deploy/install.sh" ]]; then
+        log_error "Installations-Skript nicht gefunden: $TMP_DIR/deploy/install.sh"
+        log_info "Suche nach install.sh im Repository..."
+        find "$TMP_DIR" -name install.sh
+        
+        # Verschiebe install.sh nach $TMP_DIR/deploy/ falls gefunden
+        FOUND_INSTALL_SH=$(find "$TMP_DIR" -name install.sh | head -n 1)
+        if [[ -n "$FOUND_INSTALL_SH" ]]; then
+            log_info "install.sh gefunden unter $FOUND_INSTALL_SH. Kopiere nach $TMP_DIR/deploy/"
+            cp "$FOUND_INSTALL_SH" "$TMP_DIR/deploy/"
+        else
+            return 1
+        fi
+    fi
+    
+    # Stelle sicher, dass die erforderlichen Verzeichnisse existieren
+    mkdir -p "$TMP_DIR/deploy/docker/production"
+    mkdir -p "$TMP_DIR/deploy/docker/production/ssl"
+    
+    # Stelle sicher, dass alle Dateien in den richtigen Verzeichnissen sind
+    
+    # 1. Find and copy docker-compose.yml
+    if [[ ! -f "$TMP_DIR/deploy/docker/production/docker-compose.yml" ]]; then
+        log_info "Suche nach docker-compose.yml im Repository..."
+        
+        # Prioritäten für docker-compose.yml:
+        # 1. deploy/docker/production/docker-compose.yml
+        # 2. docker/production/docker-compose.yml
+        # 3. Irgendeine docker-compose.yml in $TMP_DIR
+        
+        local FOUND_COMPOSE=""
+        
+        if [[ -f "$TMP_DIR/deploy/docker/production/docker-compose.yml" ]]; then
+            FOUND_COMPOSE="$TMP_DIR/deploy/docker/production/docker-compose.yml"
+        elif [[ -f "$TMP_DIR/docker/production/docker-compose.yml" ]]; then
+            FOUND_COMPOSE="$TMP_DIR/docker/production/docker-compose.yml"
+        else
+            FOUND_COMPOSE=$(find "$TMP_DIR" -name docker-compose.yml | grep -E "production" | head -n 1)
+            
+            if [[ -z "$FOUND_COMPOSE" ]]; then
+                FOUND_COMPOSE=$(find "$TMP_DIR" -name docker-compose.yml | head -n 1)
+            fi
+        fi
+        
+        if [[ -n "$FOUND_COMPOSE" ]]; then
+            log_info "docker-compose.yml gefunden unter $FOUND_COMPOSE. Kopiere nach $TMP_DIR/deploy/docker/production/"
+            cp "$FOUND_COMPOSE" "$TMP_DIR/deploy/docker/production/"
+        else
+            log_error "Docker-Compose-Datei nicht gefunden."
+            log_info "Verfügbare docker-compose.yml Dateien:"
+            find "$TMP_DIR" -name docker-compose.yml
+            return 1
+        fi
+    fi
+    
+    # 2. Find and copy nginx.conf
+    if [[ ! -f "$TMP_DIR/deploy/docker/production/nginx.conf" ]]; then
+        log_info "Suche nach nginx.conf im Repository..."
+        
+        # Prioritäten für nginx.conf:
+        # 1. deploy/docker/production/nginx.conf
+        # 2. docker/production/nginx.conf
+        # 3. Irgendeine nginx.conf in $TMP_DIR
+        
+        local FOUND_NGINX=""
+        
+        if [[ -f "$TMP_DIR/deploy/docker/production/nginx.conf" ]]; then
+            FOUND_NGINX="$TMP_DIR/deploy/docker/production/nginx.conf"
+        elif [[ -f "$TMP_DIR/docker/production/nginx.conf" ]]; then
+            FOUND_NGINX="$TMP_DIR/docker/production/nginx.conf"
+        else
+            FOUND_NGINX=$(find "$TMP_DIR" -name nginx.conf | grep -E "production" | head -n 1)
+            
+            if [[ -z "$FOUND_NGINX" ]]; then
+                FOUND_NGINX=$(find "$TMP_DIR" -name nginx.conf | head -n 1)
+            fi
+        fi
+        
+        if [[ -n "$FOUND_NGINX" ]]; then
+            log_info "nginx.conf gefunden unter $FOUND_NGINX. Kopiere nach $TMP_DIR/deploy/docker/production/"
+            cp "$FOUND_NGINX" "$TMP_DIR/deploy/docker/production/"
+        else
+            log_error "Nginx-Konfigurationsdatei nicht gefunden."
+            log_info "Verfügbare nginx.conf Dateien:"
+            find "$TMP_DIR" -name nginx.conf
+            return 1
+        fi
+    fi
+    
+    # Stelle sicher, dass install.sh ausführbar ist
+    chmod +x "$TMP_DIR/deploy/install.sh"
+    
     # Installationsverzeichnis erstellen
     log_info "Installationsverzeichnis wird vorbereitet: ${BOLD}$INSTALL_DIR${RESET}"
     mkdir -p "$INSTALL_DIR"
@@ -780,9 +881,23 @@ install_kormit() {
     # Mache das Skript ausführbar
     chmod +x "$TMP_DIR/deploy/install.sh"
         
-    # Führe das Skript aus
-    if ! $cmd; then
+    # Führe das Skript aus mit temporärer Fehlerprotokollierung
+    log_info "Starte Installation. Dies kann einige Minuten dauern..."
+    
+    local LOG_FILE="/tmp/kormit_install_$(date +%s).log"
+    if ! $cmd > >(tee -a "$LOG_FILE") 2>&1; then
         log_error "Installation fehlgeschlagen. Überprüfen Sie die Fehlermeldungen."
+        log_info "Fehlerprotokoll wurde gespeichert in: $LOG_FILE"
+        
+        # Suche nach häufigen Fehlerursachen
+        if grep -q "Permission denied" "$LOG_FILE"; then
+            log_error "Berechtigungsproblem erkannt. Stellen Sie sicher, dass der Benutzer ausreichende Berechtigungen hat."
+        fi
+        
+        if grep -q "No such file or directory" "$LOG_FILE"; then
+            log_error "Datei- oder Verzeichnisproblem erkannt. Eine benötigte Datei wurde nicht gefunden."
+            grep -B 1 -A 1 "No such file or directory" "$LOG_FILE"
+        fi
         
         # Biete Möglichkeit zur Fehlerdiagnose
         echo -e "\n${YELLOW}Möchten Sie die detaillierte Fehlerdiagnose starten? (j/N)${RESET}"
@@ -793,6 +908,8 @@ install_kormit() {
         
         return 1
     fi
+    
+    log_info "Installationslog wurde gespeichert in: $LOG_FILE"
     
     log_success "Kormit wurde erfolgreich installiert."
     

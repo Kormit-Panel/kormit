@@ -97,25 +97,124 @@ mkdir -p "${INSTALL_DIR}/docker/production/ssl"
 
 # Docker-Compose-Datei kopieren
 echo -e "${CYAN}▶ Kopiere Docker-Compose-Konfiguration...${RESET}"
-cp "$(dirname "$0")/docker/production/docker-compose.yml" "${INSTALL_DIR}/docker/production/"
+# Funktion zum Finden und Kopieren einer Datei
+find_and_copy_file() {
+    local file_name="$1"
+    local target_dir="$2"
+    local description="$3"
+    
+    # Standardpfad prüfen
+    if [[ -f "$(dirname "$0")/docker/production/$file_name" ]]; then
+        cp "$(dirname "$0")/docker/production/$file_name" "$target_dir/"
+        return 0
+    fi
+    
+    # Alternative Pfade suchen
+    echo -e "${YELLOW}$description nicht im Standardpfad gefunden. Suche an alternativen Orten...${RESET}"
+    
+    # Suche nach der Datei
+    local found_files=($(find "$(dirname "$0")" -name "$file_name" | sort))
+    
+    if [[ ${#found_files[@]} -eq 0 ]]; then
+        echo -e "${RED}Fehler: $description nicht gefunden.${RESET}"
+        return 1
+    fi
+    
+    # Verwende die erste gefundene Datei (bevorzuge production über development)
+    for file in "${found_files[@]}"; do
+        if [[ "$file" == *"/production/"* ]]; then
+            cp "$file" "$target_dir/"
+            echo -e "${GREEN}✅ $description aus $file kopiert.${RESET}"
+            return 0
+        fi
+    done
+    
+    # Wenn keine production-Version gefunden wurde, verwende die erste Datei
+    cp "${found_files[0]}" "$target_dir/"
+    echo -e "${YELLOW}⚠️ $description aus ${found_files[0]} kopiert (nicht aus /production/).${RESET}"
+    return 0
+}
+
+if ! find_and_copy_file "docker-compose.yml" "${INSTALL_DIR}/docker/production" "Docker-Compose-Konfiguration"; then
+    echo -e "${RED}Fehler: docker-compose.yml konnte nicht gefunden werden.${RESET}"
+    exit 1
+fi
 
 # Nginx-Konfiguration kopieren
 echo -e "${CYAN}▶ Kopiere Nginx-Konfiguration...${RESET}"
-cp "$(dirname "$0")/docker/production/nginx.conf" "${INSTALL_DIR}/docker/production/"
+if ! find_and_copy_file "nginx.conf" "${INSTALL_DIR}/docker/production" "Nginx-Konfiguration"; then
+    echo -e "${RED}Fehler: nginx.conf konnte nicht gefunden werden.${RESET}"
+    exit 1
+fi
 
 # Erstelle .env-Datei
 echo -e "${CYAN}▶ Erstelle Umgebungsvariablen-Datei...${RESET}"
 
+# Prüfe, ob das Zielverzeichnis existiert
+if [[ ! -d "${INSTALL_DIR}/docker/production" ]]; then
+    echo -e "${RED}Fehler: Verzeichnis ${INSTALL_DIR}/docker/production existiert nicht.${RESET}"
+    echo -e "${YELLOW}Versuche, das Verzeichnis zu erstellen...${RESET}"
+    mkdir -p "${INSTALL_DIR}/docker/production" || {
+        echo -e "${RED}Fehler: Konnte Verzeichnis nicht erstellen. Überprüfen Sie die Berechtigungen.${RESET}"
+        exit 1
+    }
+fi
+
 # Generiere zufällige Passwörter
-DB_PASSWORD=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | fold -w 16 | head -n 1)
-SECRET_KEY=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | fold -w 32 | head -n 1)
+echo -e "${CYAN}▶ Generiere Sicherheitstoken...${RESET}"
+
+# Alternative Methode zur Generierung von zufälligen Strings, falls tr und /dev/urandom nicht verfügbar sind
+generate_random_string() {
+    local length=$1
+    local chars='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+    local result=""
+    
+    # Versuche es zuerst mit /dev/urandom
+    if [[ -f /dev/urandom ]] && command -v tr &> /dev/null; then
+        result=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c "$length" || echo "")
+    fi
+    
+    # Fallback-Methode, wenn /dev/urandom nicht funktioniert oder das Ergebnis leer ist
+    if [[ -z "$result" ]]; then
+        # Verwende $RANDOM (Bash-interne Funktion) und date
+        for ((i=0; i<length; i++)); do
+            local pos=$(( RANDOM % ${#chars} ))
+            result+="${chars:$pos:1}"
+        done
+        
+        # Füge Zeitstempel hinzu, um Vorhersehbarkeit zu vermeiden
+        result="${result:0:$((length-10))}_$(date +%s)"
+    fi
+    
+    echo "$result"
+}
+
+# DB-Passwort generieren
+DB_PASSWORD=$(generate_random_string 16)
+if [[ -z "$DB_PASSWORD" ]]; then
+    echo -e "${RED}Fehler: Konnte kein zufälliges Datenbankpasswort generieren.${RESET}"
+    echo -e "${YELLOW}Verwende Standard-Passwort...${RESET}"
+    DB_PASSWORD="kormit_default_pass_$(date +%s)"
+fi
+
+# Secret Key generieren
+SECRET_KEY=$(generate_random_string 32)
+if [[ -z "$SECRET_KEY" ]]; then
+    echo -e "${RED}Fehler: Konnte keinen zufälligen Secret Key generieren.${RESET}"
+    echo -e "${YELLOW}Verwende Standard-Secret-Key...${RESET}"
+    SECRET_KEY="kormit_default_key_$(date +%s)"
+fi
 
 # Bekannte korrekte Image-Pfade
 BACKEND_IMAGE="ghcr.io/kormit-panel/kormit/kormit-backend:main"
 FRONTEND_IMAGE="ghcr.io/kormit-panel/kormit/kormit-frontend:main"
 
 # Erstelle .env-Datei
-cat > "${INSTALL_DIR}/docker/production/.env" << EOL
+echo -e "${CYAN}▶ Schreibe .env-Datei...${RESET}"
+ENV_FILE="${INSTALL_DIR}/docker/production/.env"
+
+# Versuche, die .env-Datei zu erstellen
+if ! cat > "$ENV_FILE" << EOL
 # Kormit-Konfiguration
 DB_USER=kormit_user
 DB_PASSWORD=${DB_PASSWORD}
@@ -132,6 +231,19 @@ HTTPS_PORT=${HTTPS_PORT}
 BACKEND_IMAGE=${BACKEND_IMAGE}
 FRONTEND_IMAGE=${FRONTEND_IMAGE}
 EOL
+then
+    echo -e "${RED}Fehler: Konnte .env-Datei nicht erstellen: $ENV_FILE${RESET}"
+    echo -e "${YELLOW}Überprüfen Sie die Schreibberechtigungen für dieses Verzeichnis.${RESET}"
+    exit 1
+fi
+
+# Prüfe, ob die Datei erfolgreich erstellt wurde
+if [[ ! -f "$ENV_FILE" ]]; then
+    echo -e "${RED}Fehler: .env-Datei wurde nicht erstellt: $ENV_FILE${RESET}"
+    exit 1
+fi
+
+echo -e "${GREEN}✅ Umgebungsvariablen-Datei wurde erstellt.${RESET}"
 
 # HTTPS-Konfiguration
 if [[ "$HTTP_ONLY" = false ]]; then
